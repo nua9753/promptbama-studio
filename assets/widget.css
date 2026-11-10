@@ -211,6 +211,10 @@ img { display: block; max-width: 100%; }
 .selfie { width: 76px; height: 76px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line2); background: #1f1f23; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .selfie img { width: 100%; height: 100%; object-fit: cover; }
 .selfie.is-on { outline: 3px solid var(--a); outline-offset: 2px; }
+.people-badge { position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,.78); color: var(--a); font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 999px; }
+.mini-img { position: relative; display: block; }
+.selfie.is-taken { opacity: .45; }
+.ok-chip { display: inline-flex; align-items: center; gap: 4px; color: var(--a); font-size: 12px; font-weight: 900; }
 .selfie-wrap { position: relative; display: inline-flex; }
 .selfie-x { position: absolute; top: -8px; left: -8px; width: 26px; height: 26px; border-radius: 999px; border: 2px solid #000; background: #fff; color: #000; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
 .selfie-x::after { content: ''; position: absolute; inset: -9px; }

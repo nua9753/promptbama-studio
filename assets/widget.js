@@ -173,6 +173,12 @@
 
   /* --------------------------------- card --------------------------------- */
 
+  function peopleOf(style) { var n = Number(style && style.people) || 1; return n > 3 ? 3 : n < 1 ? 1 : n; }
+  function peopleBadge(style) {
+    var n = peopleOf(style);
+    return n > 1 ? h('span', { class: 'people-badge', text: n === 2 ? 'دونفره' : 'سه‌نفره' }) : null;
+  }
+
   function tile(style, i, variant, selected, onPick) {
     var caption = null;
     if (variant === 'b') {
@@ -187,6 +193,7 @@
     }, [
       h('span', { class: 'tile-img' }, [
         h('img', { src: style.imageUrl, alt: style.title, loading: 'lazy', decoding: 'async' }),
+        peopleBadge(style),
         selected ? h('span', { class: 'tile-check' }, icon('check', 14)) : null
       ]),
       caption ? h('span', { class: 'tile-cap', text: caption }) : null,
@@ -418,7 +425,7 @@
       lastFocus = document.activeElement;
       f = {
         style: ctx.style, styles: ctx.styles || [ctx.style], variant: ctx.variant || 'a',
-        category: ctx.category || '', file: null, preview: null, selfieId: null,
+        category: ctx.category || '', file: null, preview: null, selfieId: null, others: [],
         me: null, phone: '', exists: null, error: '', busy: false, job: null, pack: 'pack5'
       };
       openState = true;
@@ -445,7 +452,13 @@
     function loadMe() {
       return api('GET', '/me').then(function (me) {
         f.me = me;
-        if (!f.selfieId && me.selfies && me.selfies.length && !f.file) f.selfieId = me.selfies[0].id;
+        if (!f.selfieId && me.selfies && me.selfies.length && !f.file) {
+          var taken = (f.others || []).map(function (o) { return o && o.selfieId; });
+          var free = me.selfies.filter(function (x) { return taken.indexOf(x.id) === -1; })[0];
+          if (free) f.selfieId = free.id;
+        }
+        var have = (me.selfies || []).map(function (x) { return x.id; });
+        (f.others || []).forEach(function (o) { if (o && o.selfieId && have.indexOf(o.selfieId) === -1) o.selfieId = null; });
         return me;
       }).catch(function () { f.me = null; });
     }
@@ -508,12 +521,63 @@
 
     /* ---------- step 1: style + selfie ---------- */
 
+    /* Extra people for two/three-person styles: one photo per person. */
+    function slotOf(idx) {
+      if (!f.others[idx - 1]) f.others[idx - 1] = { file: null, preview: null, selfieId: null };
+      return f.others[idx - 1];
+    }
+    function releaseSelfie(id, keep) {
+      if (!id) return;
+      if (keep !== 0 && f.selfieId === id) f.selfieId = null;
+      f.others.forEach(function (o, k) { if (o && keep !== k + 1 && o.selfieId === id) o.selfieId = null; });
+    }
+    function personBox(idx, selfies, usedIds) {
+      var slot = slotOf(idx);
+      var name = idx === 1 ? 'نفر دوم' : 'نفر سوم';
+      var inputId = 'pbs-file-' + idx;
+      var inp = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', class: 'sr', id: inputId, onchange: function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.size > 25 * 1024 * 1024) { setError('حجم عکس زیاد است (حداکثر ۲۵ مگابایت).'); return; }
+        if (slot.preview) URL.revokeObjectURL(slot.preview);
+        slot.file = file; slot.preview = URL.createObjectURL(file); slot.selfieId = null;
+        render();
+      } });
+      var items = [];
+      if (slot.preview) {
+        items.push(h('span', { class: 'selfie-wrap' }, [
+          h('span', { class: 'selfie is-on' }, [h('img', { src: slot.preview, alt: name })]),
+          h('button', { type: 'button', class: 'selfie-x', 'aria-label': 'برداشتن عکس ' + name, onclick: function () {
+            if (slot.preview) URL.revokeObjectURL(slot.preview);
+            slot.file = null; slot.preview = null; render();
+          } }, icon('close', 14))
+        ]));
+      }
+      selfies.forEach(function (sf) {
+        var on = !slot.file && slot.selfieId === sf.id;
+        var takenElsewhere = !on && usedIds.indexOf(sf.id) !== -1;
+        items.push(h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : '') + (takenElsewhere ? ' is-taken' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'عکس ' + name, onclick: function () {
+          if (slot.preview) { URL.revokeObjectURL(slot.preview); slot.preview = null; }
+          slot.file = null;
+          releaseSelfie(sf.id, idx);
+          slot.selfieId = sf.id;
+          render();
+        } }, [h('img', { src: sf.url, alt: '' })]));
+      });
+      items.push(h('label', { class: 'selfie add', for: inputId }, [icon('camera', 20), h('span', { text: 'عکس ' + name })]));
+      return h('div', { class: 'box' }, [
+        h('div', { class: 'box-head' }, [h('strong', { text: name }), (slot.file || slot.selfieId) ? h('span', { class: 'ok-chip' }, [icon('check', 12), 'آماده']) : h('span', { class: 'muted', text: 'یک عکس واضح از صورت' })]),
+        h('div', { class: 'selfies' }, items),
+        inp
+      ]);
+    }
+
     function stepStyle() {
       var selfies = (f.me && f.me.selfies) || [];
       var rail = h('div', { class: 'mini-rail' }, f.styles.map(function (s) {
         var on = s.slug === f.style.slug;
         return h('button', { type: 'button', class: 'mini' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { f.style = s; render(); } }, [
-          h('img', { src: s.imageUrl, alt: '', loading: 'lazy', decoding: 'async' }), h('span', { text: s.title })
+          h('span', { class: 'mini-img' }, [h('img', { src: s.imageUrl, alt: '', loading: 'lazy', decoding: 'async' }), peopleBadge(s)]), h('span', { text: s.title })
         ]);
       }));
 
@@ -546,12 +610,12 @@
         var on = !f.file && f.selfieId === s.id;
         thumbs.push(h('span', { class: 'selfie-wrap' }, [
           h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'استفاده از این سلفی', onclick: function () {
-            f.file = null; f.selfieId = s.id; render();
+            f.file = null; releaseSelfie(s.id, 0); f.selfieId = s.id; render();
           } }, [h('img', { src: s.url, alt: '' })]),
           removeBtn('حذف این سلفی از حسابم', function () {
             f.removing = true; render();
             api('DELETE', '/selfies/' + encodeURIComponent(s.id)).then(function () {
-              if (f.selfieId === s.id) f.selfieId = null;
+              releaseSelfie(s.id, -1);
               return loadMe();
             }).then(function () {
               f.removing = false; setError(''); render(); Toast.say('سلفی پاک شد؛ یک عکس دیگر انتخاب کن.');
@@ -561,21 +625,29 @@
       });
       thumbs.push(h('label', { class: 'selfie add', for: 'pbs-file' }, [icon('camera', 22), h('span', { text: thumbs.length ? 'عکس دیگر' : 'عکس بگیر یا انتخاب کن' })]));
 
-      var hasSelfie = Boolean(f.file || f.selfieId);
+      var people = peopleOf(f.style);
+      var usedIds = [f.selfieId].concat(f.others.map(function (o) { return o && o.selfieId; }));
+      var extraBoxes = [];
+      for (var pi = 1; pi < people; pi++) extraBoxes.push(personBox(pi, selfies, usedIds));
+      var othersOk = true;
+      for (var pj = 1; pj < people; pj++) { var o = f.others[pj - 1]; if (!o || !(o.file || o.selfieId)) othersOk = false; }
+      var hasSelfie = Boolean(f.file || f.selfieId) && othersOk;
       frame(
         { title: 'استایلت را انتخاب کن', stepLabel: 'قدم ۱ از ۳', dark: true, keepScroll: true },
         [
           rail,
           h('div', { class: 'box' }, [
-            h('div', { class: 'box-head' }, [h('strong', { text: 'سلفی‌ات را اضافه کن' }), h('span', { class: 'muted', text: 'یک عکس کافی است' })]),
+            h('div', { class: 'box-head' }, people > 1
+              ? [h('strong', { text: 'نفر اول (تو)' }), h('span', { class: 'muted', text: 'از هر نفر یک عکس' })]
+              : [h('strong', { text: 'سلفی‌ات را اضافه کن' }), h('span', { class: 'muted', text: 'یک عکس کافی است' })]),
             h('div', { class: 'selfies' }, thumbs),
             input,
             h('p', { class: 'muted small', text: 'نور روشن، صورت از روبه‌رو و بدون عینک آفتابی؛ نتیجه شبیه‌تر می‌شود.' })
-          ]),
+          ])].concat(extraBoxes).concat([
           privacyLine()
-        ],
+        ]),
         [cta('ادامه', function () {
-          if (!hasSelfie) { setError('اول یک سلفی اضافه کن.'); return; }
+          if (!hasSelfie) { setError(people > 1 ? 'از هر ' + (people === 2 ? 'دو' : 'سه') + ' نفر یک عکس اضافه کن.' : 'اول یک سلفی اضافه کن.'); return; }
           if (!token()) go('auth');
           else proceed();
         }, { disabled: !hasSelfie })]
@@ -652,6 +724,21 @@
         })()
         : Promise.resolve();
       upload.then(function () {
+        var need = peopleOf(f.style);
+        var chain = Promise.resolve();
+        f.others.slice(0, need - 1).forEach(function (slot) {
+          if (!slot || !slot.file) return;
+          chain = chain.then(function () {
+            var fd2 = new FormData();
+            fd2.append('file', slot.file);
+            return api('POST', '/selfies', fd2).then(function (d) {
+              slot.selfieId = d.selfie.id; slot.file = null;
+              if (slot.preview) { URL.revokeObjectURL(slot.preview); slot.preview = null; }
+            });
+          });
+        });
+        return chain;
+      }).then(function () {
         f.busy = false;
         var credits = f.me ? Number(f.me.imageCredits || 0) : 0;
         if (credits >= 1) startGeneration();
@@ -754,7 +841,7 @@
 
     function pay(pack, disc) {
       f.busy = true; render();
-      ssSet(PENDING_KEY, JSON.stringify({ style: f.style, styles: f.styles.slice(0, 12), variant: f.variant, category: f.category, selfieId: f.selfieId, at: Date.now() }));
+      ssSet(PENDING_KEY, JSON.stringify({ style: f.style, styles: f.styles.slice(0, 12), variant: f.variant, category: f.category, selfieId: f.selfieId, others: f.others.map(function (o) { return { selfieId: o && o.selfieId || null }; }), at: Date.now() }));
       var body = pack.id === 'single'
         ? { kind: 'single', slug: f.style.slug, returnUrl: location.href.split('#')[0] }
         : { kind: 'pack', credits: pack.credits, slug: f.style.slug, returnUrl: location.href.split('#')[0] };
@@ -767,11 +854,21 @@
 
     /* ---------- step 4: generating ---------- */
 
+    function selfieIdsFor(style) {
+      var ids = f.selfieId ? [f.selfieId] : [];
+      var need = peopleOf(style);
+      for (var k = 1; k < need; k++) { var o = f.others[k - 1]; if (o && o.selfieId) ids.push(o.selfieId); }
+      return ids;
+    }
+    function hasFacesFor(style) {
+      return selfieIdsFor(style).length >= peopleOf(style);
+    }
+
     function startGeneration() {
       f.busy = true;
       f.job = null;
       go('gen');
-      api('POST', '/generate', { slug: f.style.slug, selfieIds: f.selfieId ? [f.selfieId] : [] }).then(function (d) {
+      api('POST', '/generate', { slug: f.style.slug, selfieIds: selfieIdsFor(f.style) }).then(function (d) {
         track('generate', f.variant);
         f.job = d.job; f.busy = false; f.startedAt = Date.now();
         render(); poll();
@@ -868,7 +965,7 @@
         h('div', { class: 'mini-rail' }, others.map(function (s) {
           return h('button', { type: 'button', class: 'mini', onclick: function () {
             f.style = s; f.job = null; f.paidNotice = false;
-            if (credits > 0 && f.selfieId) startGeneration(); else go('style');
+            if (credits > 0 && hasFacesFor(s)) startGeneration(); else go('style');
           } }, [h('img', { src: s.imageUrl, alt: '', loading: 'lazy', decoding: 'async' }), h('span', { text: s.title })]);
         }))
       ]);
@@ -926,6 +1023,7 @@
         if (!pending || !pending.style || !token()) return;
         open(pending, false);
         f.selfieId = pending.selfieId || null;
+        f.others = (pending.others || []).map(function (o) { return { file: null, preview: null, selfieId: (o && o.selfieId) || null }; });
         if (status === 'ok') {
           track('paid', f.variant);
           f.paidNotice = true;
