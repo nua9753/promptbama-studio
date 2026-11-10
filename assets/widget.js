@@ -527,15 +527,37 @@
         render();
       } });
 
+      function removeBtn(label, onRemove) {
+        return h('button', { type: 'button', class: 'selfie-x', 'aria-label': label, disabled: f.removing ? true : null, onclick: function (e) { e.stopPropagation(); onRemove(); } }, icon('close', 14));
+      }
       var thumbs = [];
       if (f.preview) {
-        thumbs.push(h('span', { class: 'selfie is-on' }, [h('img', { src: f.preview, alt: 'سلفی تو' })]));
+        thumbs.push(h('span', { class: 'selfie-wrap' }, [
+          h('span', { class: 'selfie is-on' }, [h('img', { src: f.preview, alt: 'سلفی تو' })]),
+          removeBtn('برداشتن این عکس', function () {
+            if (f.preview) URL.revokeObjectURL(f.preview);
+            f.file = null; f.preview = null;
+            var el = root.querySelector('#pbs-file'); if (el) el.value = '';
+            setError(''); render();
+          })
+        ]));
       }
       selfies.forEach(function (s) {
         var on = !f.file && f.selfieId === s.id;
-        thumbs.push(h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'استفاده از این سلفی', onclick: function () {
-          f.file = null; f.selfieId = s.id; render();
-        } }, [h('img', { src: s.url, alt: '' })]));
+        thumbs.push(h('span', { class: 'selfie-wrap' }, [
+          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'استفاده از این سلفی', onclick: function () {
+            f.file = null; f.selfieId = s.id; render();
+          } }, [h('img', { src: s.url, alt: '' })]),
+          removeBtn('حذف این سلفی از حسابم', function () {
+            f.removing = true; render();
+            api('DELETE', '/selfies/' + encodeURIComponent(s.id)).then(function () {
+              if (f.selfieId === s.id) f.selfieId = null;
+              return loadMe();
+            }).then(function () {
+              f.removing = false; setError(''); render(); Toast.say('سلفی پاک شد؛ یک عکس دیگر انتخاب کن.');
+            }).catch(function (e) { f.removing = false; setError(friendly(e)); });
+          })
+        ]));
       });
       thumbs.push(h('label', { class: 'selfie add', for: 'pbs-file' }, [icon('camera', 22), h('span', { text: thumbs.length ? 'عکس دیگر' : 'عکس بگیر یا انتخاب کن' })]));
 

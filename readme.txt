@@ -4,7 +4,7 @@ Tags: ai, portrait, image generation, widget, persian
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.4.1
 License: GPLv2 or later
 
 ویجت ساخت پرتره با هوش مصنوعی داخل مقاله‌های سایت شما، متصل به پرامپت باما.
@@ -47,6 +47,9 @@ License: GPLv2 or later
 در تب «اتصال» لینک پشتیبانی را وارد کنید تا در فرم ورود نمایش داده شود.
 
 == Changelog ==
+
+= 1.4.1 =
+* دکمه‌ی × روی سلفی‌ها: برداشتن عکس تازه یا حذف سلفی ذخیره‌شده و انتخاب عکس دیگر.
 
 = 1.4.0 =
 * به‌روزرسانی خودکار از گیت‌هاب (دکمه‌ی «به‌روزرسانی» خود وردپرس).

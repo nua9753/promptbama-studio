@@ -211,6 +211,11 @@ img { display: block; max-width: 100%; }
 .selfie { width: 76px; height: 76px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line2); background: #1f1f23; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 .selfie img { width: 100%; height: 100%; object-fit: cover; }
 .selfie.is-on { outline: 3px solid var(--a); outline-offset: 2px; }
+.selfie-wrap { position: relative; display: inline-flex; }
+.selfie-x { position: absolute; top: -8px; left: -8px; width: 26px; height: 26px; border-radius: 999px; border: 2px solid #000; background: #fff; color: #000; display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
+.selfie-x::after { content: ''; position: absolute; inset: -9px; }
+.selfie-x .ic { stroke-width: 3; }
+.selfie-x:disabled { opacity: .5; }
 .selfie.add { flex: 1; min-width: 140px; border: 1.5px dashed var(--line2); background: transparent; gap: 8px; font-size: 13px; font-weight: 800; cursor: pointer; padding: 0 12px; }
 
 .form { display: flex; flex-direction: column; gap: 10px; }
