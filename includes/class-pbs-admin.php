@@ -243,10 +243,32 @@ class PBS_Admin {
 
 	/* ------------------------------- tabs -------------------------------- */
 
+	/** Version box: installed vs GitHub, with a "check now" button. */
+	private static function update_card() {
+		$info   = PBS_Updater::remote();
+		$remote = $info['version'];
+		$newer  = $remote && version_compare( $remote, PBS_VERSION, '>' );
+		echo '<div class="pbs-card"><h2>' . esc_html__( 'نسخه و به‌روزرسانی', 'promptbama-studio' ) . '</h2><p>';
+		echo esc_html__( 'نسخه‌ی نصب‌شده:', 'promptbama-studio' ) . ' <strong>' . esc_html( PBS_VERSION ) . '</strong> · ';
+		echo esc_html__( 'آخرین نسخه در گیت‌هاب:', 'promptbama-studio' ) . ' <strong>' . esc_html( $remote ? $remote : '—' ) . '</strong>';
+		if ( ! empty( $info['error'] ) ) {
+			echo '<br><span class="pbs-muted">' . esc_html__( 'خطا در دریافت از گیت‌هاب:', 'promptbama-studio' ) . ' ' . esc_html( $info['error'] ) . '</span>';
+		}
+		echo '</p><p>';
+		if ( $newer ) {
+			$url = wp_nonce_url( self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( plugin_basename( PBS_FILE ) ) ), 'upgrade-plugin_' . plugin_basename( PBS_FILE ) );
+			echo '<a class="button button-primary" href="' . esc_url( $url ) . '">' . esc_html( sprintf( __( 'به‌روزرسانی به %s', 'promptbama-studio' ), $remote ) ) . '</a> ';
+		}
+		echo '<a class="button" href="' . esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=pbs_check_update' ), 'pbs_check_update' ) ) . '">' . esc_html__( 'بررسی الان', 'promptbama-studio' ) . '</a>';
+		echo '</p></div>';
+	}
+
 	private static function tab_dashboard( $o ) {
 		$days   = 30;
 		$totals = PBS_Stats::totals( $days );
 		$events = PBS_Stats::events();
+
+		self::update_card();
 
 		if ( ! PBS_Options::is_ready() ) {
 			echo '<div class="pbs-card pbs-card-warn"><h2>' . esc_html__( 'شروع کار', 'promptbama-studio' ) . '</h2><ol>';

@@ -34,6 +34,30 @@ class PBS_Updater {
 		add_filter( 'upgrader_source_selection', array( __CLASS__, 'fix_folder' ), 10, 4 );
 		add_filter( 'http_request_args', array( __CLASS__, 'auth' ), 10, 2 );
 		add_action( 'upgrader_process_complete', array( __CLASS__, 'flush' ), 10, 0 );
+		// WordPress "Check again" (update-core.php?force-check=1) must also skip our cache.
+		add_action( 'load-update-core.php', array( __CLASS__, 'maybe_force' ) );
+		add_action( 'load-plugins.php', array( __CLASS__, 'maybe_force' ) );
+		add_action( 'admin_post_pbs_check_update', array( __CLASS__, 'check_now' ) );
+	}
+
+	public static function maybe_force() {
+		if ( ! empty( $_GET['force-check'] ) && current_user_can( 'update_plugins' ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			self::flush();
+		}
+	}
+
+	/** Admin button: re-check GitHub now and refresh WordPress's update list. */
+	public static function check_now() {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			wp_die( esc_html__( 'دسترسی ندارید.', 'promptbama-studio' ) );
+		}
+		check_admin_referer( 'pbs_check_update' );
+		self::flush();
+		self::remote( true );
+		delete_site_transient( 'update_plugins' );
+		wp_update_plugins();
+		wp_safe_redirect( admin_url( 'admin.php?page=promptbama-studio&tab=dashboard&pbs_checked=1' ) );
+		exit;
 	}
 
 	private static function token() {
@@ -51,14 +75,23 @@ class PBS_Updater {
 		if ( ! $force && is_array( $cached ) ) {
 			return $cached;
 		}
-		$info = array( 'version' => '', 'error' => '' );
-		$res  = wp_remote_get(
-			self::api_base() . '/contents/promptbama-studio.php?ref=' . rawurlencode( self::branch() ),
-			array(
-				'timeout' => 10,
-				'headers' => array( 'Accept' => 'application/vnd.github.raw' ),
-			)
-		);
+		$info  = array( 'version' => '', 'error' => '', 'checked' => time() );
+		$token = self::token();
+		if ( '' === $token ) {
+			// Public repository: raw file, no API rate limit.
+			$res = wp_remote_get(
+				'https://raw.githubusercontent.com/' . self::repo() . '/' . rawurlencode( self::branch() ) . '/promptbama-studio.php',
+				array( 'timeout' => 15 )
+			);
+		} else {
+			$res = wp_remote_get(
+				self::api_base() . '/contents/promptbama-studio.php?ref=' . rawurlencode( self::branch() ),
+				array(
+					'timeout' => 15,
+					'headers' => array( 'Accept' => 'application/vnd.github.raw' ),
+				)
+			);
+		}
 		if ( is_wp_error( $res ) ) {
 			$info['error'] = $res->get_error_message();
 		} elseif ( 200 !== (int) wp_remote_retrieve_response_code( $res ) ) {
@@ -68,11 +101,14 @@ class PBS_Updater {
 		} else {
 			$info['error'] = 'version not found';
 		}
-		set_site_transient( self::CACHE, $info, '' === $info['error'] ? 6 * HOUR_IN_SECONDS : HOUR_IN_SECONDS );
+		set_site_transient( self::CACHE, $info, '' === $info['error'] ? 3 * HOUR_IN_SECONDS : 30 * MINUTE_IN_SECONDS );
 		return $info;
 	}
 
 	private static function package_url() {
+		if ( '' === self::token() ) {
+			return 'https://github.com/' . self::repo() . '/archive/refs/heads/' . rawurlencode( self::branch() ) . '.zip';
+		}
 		return self::api_base() . '/zipball/' . rawurlencode( self::branch() );
 	}
 
