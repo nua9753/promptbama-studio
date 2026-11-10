@@ -425,7 +425,7 @@
       lastFocus = document.activeElement;
       f = {
         style: ctx.style, styles: ctx.styles || [ctx.style], variant: ctx.variant || 'a',
-        category: ctx.category || '', file: null, preview: null, selfieId: null, others: [],
+        category: ctx.category || '', selfieId: null, lid: null, locals: [], others: [],
         me: null, phone: '', exists: null, error: '', busy: false, job: null, pack: 'pack5'
       };
       openState = true;
@@ -452,7 +452,7 @@
     function loadMe() {
       return api('GET', '/me').then(function (me) {
         f.me = me;
-        if (!f.selfieId && me.selfies && me.selfies.length && !f.file) {
+        if (!f.selfieId && !f.lid && me.selfies && me.selfies.length) {
           var taken = (f.others || []).map(function (o) { return o && o.selfieId; });
           var free = me.selfies.filter(function (x) { return taken.indexOf(x.id) === -1; })[0];
           if (free) f.selfieId = free.id;
@@ -521,54 +521,107 @@
 
     /* ---------- step 1: style + selfie ---------- */
 
-    /* Extra people for two/three-person styles: one photo per person. */
+    /* Faces. Person 0 is the user; persons 1–2 exist for two/three-person
+       styles. Each person points at a saved selfie (id) or at a photo picked on
+       this device (lid) that is uploaded when they continue. Any number of
+       photos can be added; each person picks one. */
+    var lidSeq = 0;
     function slotOf(idx) {
-      if (!f.others[idx - 1]) f.others[idx - 1] = { file: null, preview: null, selfieId: null };
+      if (!f.others[idx - 1]) f.others[idx - 1] = { selfieId: null, lid: null };
       return f.others[idx - 1];
     }
-    function releaseSelfie(id, keep) {
-      if (!id) return;
-      if (keep !== 0 && f.selfieId === id) f.selfieId = null;
-      f.others.forEach(function (o, k) { if (o && keep !== k + 1 && o.selfieId === id) o.selfieId = null; });
+    function selOf(idx) { return idx === 0 ? { selfieId: f.selfieId, lid: f.lid } : slotOf(idx); }
+    function setSel(idx, id, lid) {
+      // One photo can't be two people: release it from everyone else first.
+      for (var k = 0; k < 3; k++) {
+        if (k === idx) continue;
+        var o = k === 0 ? null : f.others[k - 1];
+        if (k === 0) {
+          if (id && f.selfieId === id) f.selfieId = null;
+          if (lid && f.lid === lid) f.lid = null;
+        } else if (o) {
+          if (id && o.selfieId === id) o.selfieId = null;
+          if (lid && o.lid === lid) o.lid = null;
+        }
+      }
+      if (idx === 0) { f.selfieId = id || null; f.lid = lid || null; }
+      else { var sl = slotOf(idx); sl.selfieId = id || null; sl.lid = lid || null; }
     }
-    function personBox(idx, selfies, usedIds) {
-      var slot = slotOf(idx);
-      var name = idx === 1 ? 'نفر دوم' : 'نفر سوم';
+    function releaseSelfie(id) {
+      if (!id) return;
+      if (f.selfieId === id) f.selfieId = null;
+      f.others.forEach(function (o) { if (o && o.selfieId === id) o.selfieId = null; });
+    }
+    function releaseLocal(lid) {
+      if (f.lid === lid) f.lid = null;
+      f.others.forEach(function (o) { if (o && o.lid === lid) o.lid = null; });
+    }
+    function usedBy(idx, id, lid) {
+      for (var k = 0; k < 3; k++) {
+        if (k === idx) continue;
+        var sel = k === 0 ? { selfieId: f.selfieId, lid: f.lid } : f.others[k - 1];
+        if (!sel) continue;
+        if ((id && sel.selfieId === id) || (lid && sel.lid === lid)) return true;
+      }
+      return false;
+    }
+    function hasFace(idx) { var sel = selOf(idx); return Boolean(sel && (sel.selfieId || sel.lid)); }
+
+    function facePicker(idx, people, selfies) {
+      var sel = selOf(idx);
       var inputId = 'pbs-file-' + idx;
-      var inp = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', class: 'sr', id: inputId, onchange: function (e) {
-        var file = e.target.files && e.target.files[0];
-        if (!file) return;
-        if (file.size > 25 * 1024 * 1024) { setError('حجم عکس زیاد است (حداکثر ۲۵ مگابایت).'); return; }
-        if (slot.preview) URL.revokeObjectURL(slot.preview);
-        slot.file = file; slot.preview = URL.createObjectURL(file); slot.selfieId = null;
+      var name = idx === 0 ? (people > 1 ? 'نفر اول (تو)' : 'سلفی‌ات را اضافه کن') : (idx === 1 ? 'نفر دوم' : 'نفر سوم');
+      var inp = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, class: 'sr', id: inputId, onchange: function (e) {
+        var files = Array.prototype.slice.call((e.target.files || []));
+        var first = null;
+        files.forEach(function (file) {
+          if (file.size > 25 * 1024 * 1024) { setError('حجم عکس زیاد است (حداکثر ۲۵ مگابایت).'); return; }
+          var item = { lid: 'l' + (++lidSeq), file: file, preview: URL.createObjectURL(file) };
+          f.locals.push(item);
+          if (!first) first = item;
+        });
+        e.target.value = '';
+        if (first) { setSel(idx, null, first.lid); track('selfie', f.variant, true); }
         render();
       } });
       var items = [];
-      if (slot.preview) {
+      f.locals.forEach(function (it) {
+        var on = sel.lid === it.lid;
         items.push(h('span', { class: 'selfie-wrap' }, [
-          h('span', { class: 'selfie is-on' }, [h('img', { src: slot.preview, alt: name })]),
-          h('button', { type: 'button', class: 'selfie-x', 'aria-label': 'برداشتن عکس ' + name, onclick: function () {
-            if (slot.preview) URL.revokeObjectURL(slot.preview);
-            slot.file = null; slot.preview = null; render();
+          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : '') + (!on && usedBy(idx, null, it.lid) ? ' is-taken' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'انتخاب این عکس', onclick: function () { setSel(idx, null, it.lid); render(); } }, [h('img', { src: it.preview, alt: '' })]),
+          h('button', { type: 'button', class: 'selfie-x', 'aria-label': 'برداشتن این عکس', onclick: function () {
+            URL.revokeObjectURL(it.preview);
+            f.locals = f.locals.filter(function (x) { return x.lid !== it.lid; });
+            releaseLocal(it.lid); setError(''); render();
           } }, icon('close', 14))
         ]));
-      }
-      selfies.forEach(function (sf) {
-        var on = !slot.file && slot.selfieId === sf.id;
-        var takenElsewhere = !on && usedIds.indexOf(sf.id) !== -1;
-        items.push(h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : '') + (takenElsewhere ? ' is-taken' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'عکس ' + name, onclick: function () {
-          if (slot.preview) { URL.revokeObjectURL(slot.preview); slot.preview = null; }
-          slot.file = null;
-          releaseSelfie(sf.id, idx);
-          slot.selfieId = sf.id;
-          render();
-        } }, [h('img', { src: sf.url, alt: '' })]));
       });
-      items.push(h('label', { class: 'selfie add', for: inputId }, [icon('camera', 20), h('span', { text: 'عکس ' + name })]));
+      selfies.forEach(function (sf) {
+        var on = sel.selfieId === sf.id;
+        items.push(h('span', { class: 'selfie-wrap' }, [
+          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : '') + (!on && usedBy(idx, sf.id, null) ? ' is-taken' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'انتخاب این سلفی', onclick: function () { setSel(idx, sf.id, null); render(); } }, [h('img', { src: sf.url, alt: '' })]),
+          h('button', { type: 'button', class: 'selfie-x', 'aria-label': 'حذف این سلفی از حسابم', disabled: f.removing ? true : null, onclick: function () {
+            f.removing = true; render();
+            api('DELETE', '/selfies/' + encodeURIComponent(sf.id)).then(function () {
+              releaseSelfie(sf.id);
+              return loadMe();
+            }).then(function () {
+              f.removing = false; setError(''); render(); Toast.say('سلفی پاک شد.');
+            }).catch(function (e) { f.removing = false; setError(friendly(e)); });
+          } }, icon('close', 14))
+        ]));
+      });
+      items.push(h('label', { class: 'selfie add', for: inputId }, [icon('camera', 20), h('span', { text: items.length ? 'عکس دیگر' : 'عکس بگیر یا انتخاب کن' })]));
+      var ready = hasFace(idx);
       return h('div', { class: 'box' }, [
-        h('div', { class: 'box-head' }, [h('strong', { text: name }), (slot.file || slot.selfieId) ? h('span', { class: 'ok-chip' }, [icon('check', 12), 'آماده']) : h('span', { class: 'muted', text: 'یک عکس واضح از صورت' })]),
+        h('div', { class: 'box-head' }, [
+          h('strong', { text: name }),
+          people > 1 && ready ? h('span', { class: 'ok-chip' }, [icon('check', 12), 'آماده'])
+            : h('span', { class: 'muted', text: people > 1 ? 'یک عکس واضح از صورت' : 'یک عکس کافی است' })
+        ]),
         h('div', { class: 'selfies' }, items),
-        inp
+        inp,
+        idx === 0 ? h('p', { class: 'muted small', text: 'نور روشن، صورت از روبه‌رو و بدون عینک آفتابی؛ نتیجه شبیه‌تر می‌شود.' }) : null
       ]);
     }
 
@@ -581,76 +634,21 @@
         ]);
       }));
 
-      var input = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', class: 'sr', id: 'pbs-file', onchange: function (e) {
-        var file = e.target.files && e.target.files[0];
-        if (!file) return;
-        if (file.size > 25 * 1024 * 1024) { setError('حجم عکس زیاد است (حداکثر ۲۵ مگابایت).'); return; }
-        if (f.preview) URL.revokeObjectURL(f.preview);
-        f.file = file; f.preview = URL.createObjectURL(file); f.selfieId = null;
-        track('selfie', f.variant, true);
-        render();
-      } });
-
-      function removeBtn(label, onRemove) {
-        return h('button', { type: 'button', class: 'selfie-x', 'aria-label': label, disabled: f.removing ? true : null, onclick: function (e) { e.stopPropagation(); onRemove(); } }, icon('close', 14));
-      }
-      var thumbs = [];
-      if (f.preview) {
-        thumbs.push(h('span', { class: 'selfie-wrap' }, [
-          h('span', { class: 'selfie is-on' }, [h('img', { src: f.preview, alt: 'سلفی تو' })]),
-          removeBtn('برداشتن این عکس', function () {
-            if (f.preview) URL.revokeObjectURL(f.preview);
-            f.file = null; f.preview = null;
-            var el = root.querySelector('#pbs-file'); if (el) el.value = '';
-            setError(''); render();
-          })
-        ]));
-      }
-      selfies.forEach(function (s) {
-        var on = !f.file && f.selfieId === s.id;
-        thumbs.push(h('span', { class: 'selfie-wrap' }, [
-          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'استفاده از این سلفی', onclick: function () {
-            f.file = null; releaseSelfie(s.id, 0); f.selfieId = s.id; render();
-          } }, [h('img', { src: s.url, alt: '' })]),
-          removeBtn('حذف این سلفی از حسابم', function () {
-            f.removing = true; render();
-            api('DELETE', '/selfies/' + encodeURIComponent(s.id)).then(function () {
-              releaseSelfie(s.id, -1);
-              return loadMe();
-            }).then(function () {
-              f.removing = false; setError(''); render(); Toast.say('سلفی پاک شد؛ یک عکس دیگر انتخاب کن.');
-            }).catch(function (e) { f.removing = false; setError(friendly(e)); });
-          })
-        ]));
-      });
-      thumbs.push(h('label', { class: 'selfie add', for: 'pbs-file' }, [icon('camera', 22), h('span', { text: thumbs.length ? 'عکس دیگر' : 'عکس بگیر یا انتخاب کن' })]));
-
       var people = peopleOf(f.style);
-      var usedIds = [f.selfieId].concat(f.others.map(function (o) { return o && o.selfieId; }));
-      var extraBoxes = [];
-      for (var pi = 1; pi < people; pi++) extraBoxes.push(personBox(pi, selfies, usedIds));
-      var othersOk = true;
-      for (var pj = 1; pj < people; pj++) { var o = f.others[pj - 1]; if (!o || !(o.file || o.selfieId)) othersOk = false; }
-      var hasSelfie = Boolean(f.file || f.selfieId) && othersOk;
+      var boxes = [];
+      var complete = true;
+      for (var i = 0; i < people; i++) {
+        boxes.push(facePicker(i, people, selfies));
+        if (!hasFace(i)) complete = false;
+      }
       frame(
         { title: 'استایلت را انتخاب کن', stepLabel: 'قدم ۱ از ۳', dark: true, keepScroll: true },
-        [
-          rail,
-          h('div', { class: 'box' }, [
-            h('div', { class: 'box-head' }, people > 1
-              ? [h('strong', { text: 'نفر اول (تو)' }), h('span', { class: 'muted', text: 'از هر نفر یک عکس' })]
-              : [h('strong', { text: 'سلفی‌ات را اضافه کن' }), h('span', { class: 'muted', text: 'یک عکس کافی است' })]),
-            h('div', { class: 'selfies' }, thumbs),
-            input,
-            h('p', { class: 'muted small', text: 'نور روشن، صورت از روبه‌رو و بدون عینک آفتابی؛ نتیجه شبیه‌تر می‌شود.' })
-          ])].concat(extraBoxes).concat([
-          privacyLine()
-        ]),
+        [rail].concat(boxes).concat([privacyLine()]),
         [cta('ادامه', function () {
-          if (!hasSelfie) { setError(people > 1 ? 'از هر ' + (people === 2 ? 'دو' : 'سه') + ' نفر یک عکس اضافه کن.' : 'اول یک سلفی اضافه کن.'); return; }
+          if (!complete) { setError(people > 1 ? 'از هر ' + (people === 2 ? 'دو' : 'سه') + ' نفر یک عکس اضافه کن.' : 'اول یک سلفی اضافه کن.'); return; }
           if (!token()) go('auth');
           else proceed();
-        }, { disabled: !hasSelfie })]
+        }, { disabled: !complete })]
       );
     }
 
@@ -713,32 +711,27 @@
     function proceed() {
       f.busy = true;
       render();
-      var upload = f.file
-        ? (function () {
+      var need = peopleOf(f.style);
+      var lids = [];
+      for (var i = 0; i < need; i++) { var sel = selOf(i); if (sel.lid && lids.indexOf(sel.lid) === -1) lids.push(sel.lid); }
+      var chain = Promise.resolve();
+      lids.forEach(function (lid) {
+        chain = chain.then(function () {
+          var it = f.locals.filter(function (x) { return x.lid === lid; })[0];
+          if (!it) return;
           var fd = new FormData();
-          fd.append('file', f.file);
+          fd.append('file', it.file);
           return api('POST', '/selfies', fd).then(function (d) {
-            f.selfieId = d.selfie.id; f.file = null;
-            if (f.preview) { URL.revokeObjectURL(f.preview); f.preview = null; }
-          });
-        })()
-        : Promise.resolve();
-      upload.then(function () {
-        var need = peopleOf(f.style);
-        var chain = Promise.resolve();
-        f.others.slice(0, need - 1).forEach(function (slot) {
-          if (!slot || !slot.file) return;
-          chain = chain.then(function () {
-            var fd2 = new FormData();
-            fd2.append('file', slot.file);
-            return api('POST', '/selfies', fd2).then(function (d) {
-              slot.selfieId = d.selfie.id; slot.file = null;
-              if (slot.preview) { URL.revokeObjectURL(slot.preview); slot.preview = null; }
-            });
+            for (var k = 0; k < need; k++) {
+              var s2 = selOf(k);
+              if (s2.lid === lid) setSel(k, d.selfie.id, null);
+            }
+            URL.revokeObjectURL(it.preview);
+            f.locals = f.locals.filter(function (x) { return x.lid !== lid; });
           });
         });
-        return chain;
-      }).then(function () {
+      });
+      chain.then(function () { return loadMe().catch(function () {}); }).then(function () {
         f.busy = false;
         var credits = f.me ? Number(f.me.imageCredits || 0) : 0;
         if (credits >= 1) startGeneration();
@@ -1023,7 +1016,7 @@
         if (!pending || !pending.style || !token()) return;
         open(pending, false);
         f.selfieId = pending.selfieId || null;
-        f.others = (pending.others || []).map(function (o) { return { file: null, preview: null, selfieId: (o && o.selfieId) || null }; });
+        f.others = (pending.others || []).map(function (o) { return { selfieId: (o && o.selfieId) || null, lid: null }; });
         if (status === 'ok') {
           track('paid', f.variant);
           f.paidNotice = true;
