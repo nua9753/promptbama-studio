@@ -280,10 +280,10 @@ class PBS_Admin {
 
 		echo '<div class="pbs-card"><h2>' . sprintf( esc_html__( 'قیف تبدیل — %d روز اخیر', 'promptbama-studio' ), (int) $days ) . '</h2>';
 		echo '<table class="widefat striped pbs-funnel"><thead><tr><th>' . esc_html__( 'مرحله', 'promptbama-studio' ) . '</th>';
-		echo '<th>' . esc_html__( 'طرح اول (سیاه و نئون)', 'promptbama-studio' ) . '</th><th>' . esc_html__( 'طرح دوم (احساسی)', 'promptbama-studio' ) . '</th></tr></thead><tbody>';
+		echo '<th>' . esc_html__( 'طرح اول (سیاه و نئون)', 'promptbama-studio' ) . '</th><th>' . esc_html__( 'طرح دوم (احساسی)', 'promptbama-studio' ) . '</th><th>' . esc_html__( 'طرح سوم (سفید و آرام)', 'promptbama-studio' ) . '</th></tr></thead><tbody>';
 		foreach ( $events as $event => $label ) {
 			echo '<tr><td>' . esc_html( $label ) . '</td>';
-			foreach ( array( 'a', 'b' ) as $v ) {
+			foreach ( array( 'a', 'b', 'c' ) as $v ) {
 				$n    = (int) $totals[ $v ][ $event ];
 				$base = max( 1, (int) $totals[ $v ]['view'] );
 				$pct  = 'view' === $event ? '' : ' <span class="pbs-muted">(' . esc_html( number_format_i18n( $n * 100 / $base, 1 ) ) . '٪)</span>';
@@ -377,6 +377,8 @@ class PBS_Admin {
 			'ab' => __( 'تست A/B — هر بازدیدکننده یکی از دو طرح را ثابت می‌بیند', 'promptbama-studio' ),
 			'a'  => __( 'فقط طرح اول — سیاه و نئون', 'promptbama-studio' ),
 			'b'  => __( 'فقط طرح دوم — احساسی', 'promptbama-studio' ),
+			'c'  => __( 'فقط طرح سوم — سفید و آرام (دسته‌بندی‌ها)', 'promptbama-studio' ),
+			'abc' => __( 'تست سه‌طرفه — هر بازدیدکننده یکی از سه طرح را ثابت می‌بیند', 'promptbama-studio' ),
 		);
 		$html = '';
 		foreach ( $variants as $value => $label ) {
@@ -388,6 +390,12 @@ class PBS_Admin {
 			);
 		}
 		self::row( __( 'طرح', 'promptbama-studio' ), $html );
+		self::row(
+			__( 'دسته‌های طرح سوم', 'promptbama-studio' ),
+			self::input( 'c_categories', $o['c_categories'], 'text', 'class="large-text" dir="ltr" placeholder="mother-daughter, mother-and-son, family"' ),
+			__( 'نامک دسته‌های پرامپت باما، با کاما و به ترتیب نمایش. خالی = ۶ دسته‌ی پرمحتوا. دکمه‌ی «همه» همیشه اول است.', 'promptbama-studio' ),
+			'pbs-c_categories'
+		);
 		self::row(
 			__( 'سهم طرح دوم در تست', 'promptbama-studio' ),
 			self::input( 'ab_split', $o['ab_split'], 'number', 'min="0" max="100" step="5" class="small-text"' ) . ' ٪',

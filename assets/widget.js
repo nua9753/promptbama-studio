@@ -97,12 +97,16 @@
   /* ------------------------------ A/B + tracking ------------------------------ */
 
   function pickVariant(forced) {
-    if (forced === 'a' || forced === 'b') return forced;
-    if (C.variant === 'a' || C.variant === 'b') return C.variant;
-    var saved = lsGet('pbs_variant');
-    if (saved === 'a' || saved === 'b') return saved;
-    var v = Math.random() * 100 < Number(C.abSplit || 50) ? 'b' : 'a';
-    lsSet('pbs_variant', v);
+    if (forced === 'a' || forced === 'b' || forced === 'c') return forced;
+    if (C.variant === 'a' || C.variant === 'b' || C.variant === 'c') return C.variant;
+    var key = C.variant === 'abc' ? 'pbs_variant3' : 'pbs_variant';
+    var saved = lsGet(key);
+    var allowed = C.variant === 'abc' ? ['a', 'b', 'c'] : ['a', 'b'];
+    if (allowed.indexOf(saved) !== -1) return saved;
+    var v = C.variant === 'abc'
+      ? allowed[Math.floor(Math.random() * 3)]
+      : (Math.random() * 100 < Number(C.abSplit || 50) ? 'b' : 'a');
+    lsSet(key, v);
     return v;
   }
 
@@ -162,6 +166,22 @@
       });
     }
     return stylesCache[key];
+  }
+
+  var catsCache = null;
+  function getCategories() {
+    if (!catsCache) catsCache = api('GET', '/categories').then(function (d) { return (d && d.categories) || []; }).catch(function () { return []; });
+    return catsCache;
+  }
+  var pageCache = {};
+  function getStylePage(cat, page) {
+    var key = (cat || '_') + ':' + page;
+    if (!pageCache[key]) {
+      var q = '?limit=4&page=' + page + (cat ? '&cat=' + encodeURIComponent(cat) : '') + (C.stylesTag ? '&tag=' + encodeURIComponent(C.stylesTag) : '');
+      pageCache[key] = api('GET', '/styles' + q).then(function (d) { return { styles: (d && d.styles) || [], hasMore: !!(d && d.hasMore) }; });
+      pageCache[key].catch(function () { delete pageCache[key]; });
+    }
+    return pageCache[key];
   }
 
   function friendly(err) {
@@ -259,6 +279,117 @@
     holder.stop = function () { clearInterval(timer); if (io) io.disconnect(); };
   }
 
+  /* ------------------------- design C (white & calm) ------------------------- */
+
+  function mountCardC(host, layout, category, root) {
+    var TC = T.c || {};
+    var wrap = h('div', { class: 'wrap', 'data-variant': 'c', 'data-layout': layout });
+    root.appendChild(wrap);
+    // Legend sits on the border: give it the page's own background colour.
+    try {
+      var bg = getComputedStyle(host.parentElement || document.body).backgroundColor;
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') host.style.setProperty('--pbs-c-legend-bg', bg);
+    } catch (e) { /* ignore */ }
+
+    var state = { cats: [], cat: '', items: [], page: 0, hasMore: false, loading: true, picked: 0 };
+
+    function picked() { return state.items[state.picked]; }
+    function start() {
+      var s = picked();
+      if (!s) return;
+      Flow.open({ style: s, styles: state.items, variant: 'c', category: category });
+    }
+    function loadMore() {
+      state.loading = true; render();
+      getStylePage(state.cat, state.page + 1).then(function (d) {
+        var have = {};
+        state.items.forEach(function (x) { have[x.slug] = 1; });
+        d.styles.forEach(function (x) { if (!have[x.slug]) state.items.push(x); });
+        state.page += 1; state.hasMore = d.hasMore && d.styles.length > 0;
+        state.loading = false; render();
+      }).catch(function () { state.loading = false; render(); });
+    }
+    function chooseCat(slug) {
+      if (slug === state.cat && state.items.length) return;
+      state.cat = slug; state.items = []; state.page = 0; state.picked = 0; state.hasMore = false;
+      loadMore();
+    }
+
+    function render() {
+      var prevChips = wrap.querySelector('.c-chips');
+      var keep = prevChips ? prevChips.scrollLeft : 0;
+      wrap.innerHTML = '';
+      var grid;
+      if (!state.items.length && state.loading) {
+        grid = h('div', { class: 'c-grid' }, [0, 1, 2, 3].map(function () { return h('span', { class: 'c-skel', 'aria-hidden': 'true' }); }));
+      } else if (!state.items.length) {
+        grid = h('p', { class: 'c-empty', text: 'برای این دسته هنوز نمونه‌ای نداریم؛ یک دسته‌ی دیگر را ببینید.' });
+      } else {
+        grid = h('div', { class: 'c-grid' }, state.items.map(function (s, i) {
+          var on = i === state.picked;
+          return h('button', { type: 'button', class: 'c-item' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { state.picked = i; render(); } }, [
+            h('span', { class: 'c-img' }, [
+              h('img', { src: s.imageUrl, alt: s.title, loading: 'lazy', decoding: 'async' }),
+              peopleBadge(s),
+              on ? h('span', { class: 'c-check' }, icon('check', 14)) : null
+            ]),
+            h('span', { class: 'c-name', text: s.title })
+          ]);
+        }));
+      }
+      var card = h('section', { class: 'c-card', 'aria-label': (TC.legend || 'استودیو تصویرسازی') + ' — ساخت عکس با چهره‌ی خودتان' }, [
+        h('span', { class: 'c-legend' }, [icon('camera', 16), TC.legend || 'استودیو تصویرسازی']),
+        h('h2', { class: 'c-title', text: TC.title || 'یک عکس ساده بفرستید؛ عکس یادگاری زیبا تحویل بگیرید.' }),
+        h('p', { class: 'c-sub', text: TC.sub || 'پرتره‌ی رسمی، عکس خانوادگی یا هر طرحی که دوست دارید، با چهره‌ی خودتان.' }),
+        state.cats.length > 1 ? h('div', { class: 'c-chips', role: 'tablist', 'aria-label': 'نوع عکس' }, state.cats.map(function (c) {
+          return h('button', { type: 'button', role: 'tab', class: 'c-chip', 'aria-selected': c.slug === state.cat ? 'true' : 'false', onclick: function () { chooseCat(c.slug); }, text: c.name });
+        })) : null,
+        grid,
+        state.hasMore ? h('button', { type: 'button', class: 'c-more', disabled: state.loading ? true : null, onclick: loadMore }, [icon('chevron', 16), state.loading ? 'در حال آوردن…' : 'مشاهده‌ی نمونه‌های بیشتر']) : null,
+        h('div', { class: 'c-foot' }, [
+          h('ul', { class: 'c-trust' }, [
+            h('li', {}, [icon('shield', 18), h('span', { text: T.privacy || 'عکس شما خصوصی می‌ماند و فقط در حساب خودتان است.' })]),
+            T.guarantee ? h('li', {}, [icon('check', 18), C.supportUrl ? h('a', { href: C.supportUrl, target: '_blank', rel: 'noopener', text: T.guarantee }) : h('span', { text: T.guarantee })]) : null,
+            T.social ? h('li', {}, [h('span', { class: 'social-dot', 'aria-hidden': 'true' }), h('span', { text: faDigits(T.social) })]) : null
+          ]),
+          h('button', { type: 'button', class: 'c-cta', disabled: !picked() ? true : null, onclick: start, text: TC.cta || 'عکس خودم را بسازم' })
+        ]),
+        brandLine()
+      ]);
+      wrap.appendChild(card);
+      var chips = wrap.querySelector('.c-chips');
+      if (chips && keep) chips.scrollLeft = keep;
+    }
+
+    render();
+    var wanted = String(C.cCategories || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    getCategories().then(function (cats) {
+      var list;
+      if (wanted.length) {
+        var by = {};
+        cats.forEach(function (c) { by[c.slug] = c; });
+        list = wanted.map(function (slug) { return by[slug]; }).filter(Boolean);
+      } else {
+        list = cats.slice().sort(function (a, b) { return b.postCount - a.postCount; }).slice(0, 6);
+      }
+      state.cats = [{ slug: '', name: 'همه' }].concat(list.map(function (c) { return { slug: c.slug, name: c.name }; }));
+      // Start on the category mapped to this article, if it is one of the chips.
+      var start = list.filter(function (c) { return c.slug === category; })[0];
+      state.cat = start ? start.slug : '';
+      return getStylePage(state.cat, 1);
+    }).then(function (d) {
+      if (!d.styles.length && state.cat) { state.cat = ''; return getStylePage('', 1); }
+      return d;
+    }).then(function (d) {
+      state.items = d.styles; state.page = 1; state.hasMore = d.hasMore; state.loading = false;
+      if (!state.items.length) { host.style.display = 'none'; return; }
+      host.style.minHeight = '';
+      render();
+      watchVisibility(host, 'c');
+      if (layout === 'inline') Floating.register(host, function () { return { style: picked(), styles: state.items, variant: 'c', category: category }; });
+    }).catch(function () { host.style.display = 'none'; });
+  }
+
   function mountCard(host) {
     var forced = host.getAttribute('data-variant');
     var variant = pickVariant(forced);
@@ -266,6 +397,7 @@
     var category = host.getAttribute('data-category') || '';
     var root = shadowHost(host);
     host.style.background = 'transparent';
+    if (variant === 'c') { mountCardC(host, layout, category, root); return; }
     var state = { styles: [], picked: 0, open: true };
     var tx = variant === 'b' ? (T.b || {}) : (T.a || {});
 
@@ -381,11 +513,11 @@
         document.body.appendChild(host);
         root = shadowHost(host);
         var ctx = getCtx();
-        root.appendChild(h('div', { class: 'float' }, [
+        root.appendChild(h('div', { class: 'float' + (ctx.variant === 'c' ? ' is-light' : '') }, [
           h('button', { type: 'button', class: 'float-btn', onclick: function () { Flow.open(getCtx()); } }, [
             h('span', { class: 'float-thumbs' }, (ctx.styles || []).slice(0, 3).map(function (s) { return h('img', { src: s.imageUrl, alt: '' }); })),
             h('span', { class: 'float-text', text: T.floating || '' }),
-            h('span', { class: 'float-go', text: 'بساز' })
+            h('span', { class: 'float-go', text: ctx.variant === 'c' ? 'ساخت عکس' : 'بساز' })
           ])
         ]));
         if (!('IntersectionObserver' in window)) return;
@@ -479,6 +611,7 @@
       var prevBody = mountEl.querySelector('.sheet-body');
       var keepBody = prevBody && opts.keepScroll ? prevBody.scrollTop : 0;
       mountEl.innerHTML = '';
+      mountEl.className = 'flow-mount' + (f.variant === 'c' ? ' is-light' : '');
       var overlay = h('div', { class: 'overlay', onclick: function (e) { if (e.target === overlay && f.step !== 'gen') close(); } });
       sheet = h('div', { class: 'sheet' + (opts.dark ? ' is-dark' : ''), tabindex: '-1', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pbs-flow-title' });
       var top = h('div', { class: 'sheet-top' }, [

@@ -83,12 +83,16 @@ class PBS_Frontend {
 		$category     = '' !== $args['category'] ? $args['category'] : self::category_for_post( get_the_ID() );
 		$min_height   = 'sidebar' === $args['layout'] ? 330 : 400;
 
+		$forced  = in_array( $args['variant'], array( 'a', 'b', 'c' ), true ) ? $args['variant'] : '';
+		$mode    = $forced ? $forced : PBS_Options::get( 'variant' );
+		$placeholder_bg = 'c' === $mode ? '#f7fbfa' : ( in_array( $mode, array( 'a', 'b' ), true ) ? '#000' : 'transparent' );
 		return sprintf(
-			'<div class="pbs-root" data-layout="%1$s" data-variant="%2$s" data-category="%3$s" style="min-height:%4$dpx;margin:28px 0;border-radius:24px;background:#000" data-nosnippet></div>',
+			'<div class="pbs-root" data-layout="%1$s" data-variant="%2$s" data-category="%3$s" style="min-height:%4$dpx;margin:28px 0;border-radius:24px;background:%5$s" data-nosnippet></div>',
 			esc_attr( $args['layout'] ),
-			esc_attr( in_array( $args['variant'], array( 'a', 'b' ), true ) ? $args['variant'] : '' ),
+			esc_attr( $forced ),
 			esc_attr( sanitize_title( $category ) ),
-			(int) $min_height
+			(int) $min_height,
+			esc_attr( $placeholder_bg )
 		);
 	}
 
@@ -173,6 +177,7 @@ class PBS_Frontend {
 				'floatingBar' => (bool) $o['floating_bar'],
 				'stylesLimit' => (int) $o['styles_limit'],
 				'stylesTag'   => (string) $o['styles_tag'],
+				'cCategories' => (string) $o['c_categories'],
 				'termsUrl'    => $o['terms_url'],
 				'supportUrl'  => $o['support_url'],
 				'texts'       => array(

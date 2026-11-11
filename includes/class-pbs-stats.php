@@ -81,7 +81,7 @@ class PBS_Stats {
 	public static function track( WP_REST_Request $req ) {
 		$event   = sanitize_key( (string) $req->get_param( 'event' ) );
 		$variant = strtolower( substr( (string) $req->get_param( 'variant' ), 0, 1 ) );
-		if ( ! array_key_exists( $event, self::events() ) || ! in_array( $variant, array( 'a', 'b' ), true ) ) {
+		if ( ! array_key_exists( $event, self::events() ) || ! in_array( $variant, array( 'a', 'b', 'c' ), true ) ) {
 			return new WP_REST_Response( array( 'ok' => false ), 400 );
 		}
 
@@ -128,6 +128,7 @@ class PBS_Stats {
 		$out = array(
 			'a' => array_fill_keys( array_keys( self::events() ), 0 ),
 			'b' => array_fill_keys( array_keys( self::events() ), 0 ),
+			'c' => array_fill_keys( array_keys( self::events() ), 0 ),
 		);
 		foreach ( (array) $rows as $r ) {
 			if ( isset( $out[ $r['variant'] ][ $r['event'] ] ) ) {

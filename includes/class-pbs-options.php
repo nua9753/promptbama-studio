@@ -23,7 +23,8 @@ class PBS_Options {
 			'enabled'           => 0,
 
 			// Design.
-			'variant'           => 'ab',  // a | b | ab
+			'variant'           => 'ab',  // a | b | c | ab | abc
+			'c_categories'      => '',
 			'ab_split'          => 50,    // % of visitors who see design B
 			'accent'            => '#D7FF3D',
 			'font_family'       => 'inherit',
@@ -137,7 +138,7 @@ class PBS_Options {
 					}
 					break;
 				case 'variant':
-					$current[ $key ] = in_array( $value, array( 'a', 'b', 'ab' ), true ) ? $value : 'ab';
+					$current[ $key ] = in_array( $value, array( 'a', 'b', 'c', 'ab', 'abc' ), true ) ? $value : 'ab';
 					break;
 				case 'ab_split':
 					$current[ $key ] = max( 0, min( 100, (int) $value ) );
@@ -163,6 +164,9 @@ class PBS_Options {
 					if ( '' !== $v ) { // Empty field keeps the stored token.
 						$current[ $key ] = $v;
 					}
+					break;
+				case 'c_categories':
+					$current[ $key ] = implode( ',', array_filter( array_map( 'sanitize_title', explode( ',', (string) $value ) ) ) );
 					break;
 				case 'styles_tag':
 					$current[ $key ] = sanitize_title( (string) $value );
