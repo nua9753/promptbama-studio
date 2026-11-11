@@ -382,3 +382,5 @@ input:focus { border-color: var(--a); outline: none; }
 .toast.is-light { background: #ffffff; color: #111827; border-color: #e5e7eb; box-shadow: 0 12px 32px rgba(17,24,39,.18); }
 .toast.is-light .pill { color: #ffffff; }
 .toast.is-light .spin { border-color: rgba(15,92,82,.2); border-top-color: var(--a); }
+.acct { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+.acct .link { font-size: 13px; }

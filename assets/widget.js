@@ -676,6 +676,23 @@
     // Design C speaks to an older audience: formal «شما» and warmer words.
     function cx(base, warm) { return f && f.variant === 'c' ? warm : base; }
 
+    // Which account is signed in here, with its balance and a way out — the
+    // widget keeps its own login per site, separate from promptbama.com.
+    function accountLine() {
+      if (!f.me || !token() || f.step === 'gen' || f.step === 'auth') return null;
+      var credits = Number(f.me.imageCredits || 0);
+      return h('div', { class: 'acct' }, [
+        h('span', {}, ['وارد شده با ', h('bdi', { dir: 'ltr', text: faDigits(f.me.phone || '') }), ' · اعتبار: ' + fa(credits) + ' عکس']),
+        h('button', { type: 'button', class: 'link small', onclick: logout, text: cx('حساب دیگر', 'ورود با حساب دیگر') })
+      ]);
+    }
+    function logout() {
+      lsSet(TOKEN_KEY, null);
+      f.me = null; f.selfieId = null; f.lid = null; f.locals = []; f.phone = ''; f.exists = null;
+      (f.others || []).forEach(function (o) { if (o) { o.selfieId = null; o.lid = null; } });
+      go('style');
+    }
+
     function frame(opts, body, footer) {
       var prevMini = mountEl.querySelector('.mini-rail');
       var keepMini = prevMini ? prevMini.scrollLeft : 0;
@@ -693,6 +710,7 @@
       var content = h('div', { class: 'sheet-body' }, [
         h('h3', { class: 'sheet-title', id: 'pbs-flow-title', text: opts.title }),
         opts.sub ? h('p', { class: 'sheet-sub', text: opts.sub }) : null,
+        accountLine(),
         f.error ? h('p', { class: 'alert', role: 'alert', text: f.error }) : null
       ].concat(body));
       sheet.appendChild(top);
