@@ -56,7 +56,8 @@ class PBS_Updater {
 		self::remote( true );
 		delete_site_transient( 'update_plugins' );
 		wp_update_plugins();
-		wp_safe_redirect( admin_url( 'admin.php?page=promptbama-studio&tab=dashboard&pbs_checked=1' ) );
+		$back = wp_get_referer();
+		wp_safe_redirect( $back && false !== strpos( $back, 'plugins.php' ) ? admin_url( 'plugins.php?pbs_checked=1' ) : admin_url( 'admin.php?page=promptbama-studio&tab=dashboard&pbs_checked=1' ) );
 		exit;
 	}
 
