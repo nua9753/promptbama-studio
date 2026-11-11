@@ -524,8 +524,9 @@
   /* ----------------------------- floating bar ----------------------------- */
 
   var Floating = (function () {
-    var host = null, root = null, getCtx = null, shown = false;
+    var host = null, root = null, getCtx = null, shown = false, blocked = false;
     function show(on) {
+      if (on && blocked) on = false;
       if (!host || on === shown) return;
       shown = on;
       host.classList.toggle('pbs-float-on', on);
@@ -555,7 +556,8 @@
           });
         }).observe(cardHost);
       },
-      hide: function () { show(false); }
+      hide: function () { show(false); },
+      block: function (on) { blocked = !!on; if (on) show(false); }
     };
   })();
 
@@ -608,6 +610,7 @@
       };
       openState = true;
       Floating.hide();
+      Toast.clear();
       host.style.display = 'block';
       document.documentElement.style.overflow = 'hidden';
       track('open', f.variant);
@@ -626,6 +629,23 @@
       host.style.display = 'none';
       document.documentElement.style.overflow = '';
       if (lastFocus && lastFocus.focus) try { lastFocus.focus(); } catch (e) { /* ignore */ }
+      backgroundPill();
+    }
+
+    // While a portrait is being made in the background, keep a small pill on
+    // screen so the user can always get back to it after minimizing.
+    function backgroundPill() {
+      if (!f || openState) return;
+      if (f.step === 'gen' && f.failed) { Toast.failed(function () { reopen('gen'); }); return; }
+      if (f.step === 'gen' && (f.busy || (f.job && f.job.status !== 'COMPLETED'))) {
+        Toast.working(function () { reopen('gen'); });
+      }
+    }
+
+    var JOB_KEY = 'pbs_job';
+    function saveJob() {
+      if (!f || !f.job) { ssSet(JOB_KEY, null); return; }
+      ssSet(JOB_KEY, JSON.stringify({ id: f.job.id, t: f.startedAt || Date.now(), style: f.style, styles: (f.styles || []).slice(0, 8), variant: f.variant, category: f.category }));
     }
 
     function loadMe() {
@@ -1126,9 +1146,12 @@
       api('POST', '/generate', { slug: f.style.slug, selfieIds: selfieIdsFor(f.style) }).then(function (d) {
         track('generate', f.variant);
         f.job = d.job; f.busy = false; f.startedAt = Date.now();
-        render(); poll();
+        saveJob();
+        if (openState) render(); else backgroundPill();
+        poll();
       }).catch(function (e) {
         f.busy = false;
+        if (!openState) Toast.clear();
         if (e.code === 'insufficient_credits') {
           getConfig().then(function (cfg) { f.config = cfg; go('pay'); });
           return;
@@ -1146,6 +1169,7 @@
           f.job = d.job;
           if (d.job.status === 'COMPLETED') {
             track('delivered', f.variant);
+            ssSet(JOB_KEY, null);
             loadMe().then(function () {
               if (openState) go('done');
               else Toast.ready(function () { reopen('done'); });
@@ -1155,10 +1179,11 @@
           if (d.job.status === 'FAILED' || d.job.status === 'CANCELED') {
             f.step = 'gen';
             f.failed = true;
-            if (openState) render();
+            ssSet(JOB_KEY, null);
+            if (openState) render(); else backgroundPill();
             return;
           }
-          if (Date.now() - f.startedAt > 6 * 60 * 1000) { f.failed = true; if (openState) render(); return; }
+          if (Date.now() - f.startedAt > 6 * 60 * 1000) { f.failed = true; ssSet(JOB_KEY, null); if (openState) render(); else backgroundPill(); return; }
           // Only rebuild the sheet when the stage actually changes; a full
           // re-render every poll re-decoded the image and made the page janky.
           if (openState && f.step === 'gen' && d.job.status !== f.shownStatus) render();
@@ -1169,6 +1194,8 @@
 
     function reopen(step) {
       ensureHost();
+      Toast.clear();
+      Floating.hide();
       openState = true;
       host.style.display = 'block';
       document.documentElement.style.overflow = 'hidden';
@@ -1282,6 +1309,21 @@
     return {
       open: open,
       isOpen: function () { return openState; },
+      resumeJob: function () {
+        if (f) return;
+        var saved = null;
+        try { saved = JSON.parse(ssGet(JOB_KEY) || 'null'); } catch (e) { saved = null; }
+        if (!saved || !saved.id || !saved.style || !token() || Date.now() - saved.t > 6 * 60 * 1000) { ssSet(JOB_KEY, null); return; }
+        ensureHost();
+        f = {
+          style: saved.style, styles: saved.styles || [saved.style], variant: saved.variant || 'a',
+          category: saved.category || '', selfieId: null, lid: null, locals: [], others: [],
+          me: null, phone: '', exists: null, error: '', busy: false, pack: 'pack5',
+          job: { id: saved.id, status: 'PROCESSING' }, startedAt: saved.t, step: 'gen'
+        };
+        backgroundPill();
+        poll();
+      },
       resumeAfterPayment: function () {
         var params = new URLSearchParams(location.search);
         var status = params.get('pbs_pay');
@@ -1329,14 +1371,28 @@
       clearTimeout(timer);
       if (ms) timer = setTimeout(function () { node.remove(); }, ms);
     }
+    function clear() { clearTimeout(timer); Floating.block(false); if (root) root.querySelectorAll('.toast').forEach(function (n) { n.remove(); }); }
+    function sticky(cls, label, btn, onOpen) {
+      var n = h('button', { type: 'button', class: 'toast toast-job ' + cls, role: 'status', onclick: function () { clear(); onOpen(); } }, [
+        cls === 'is-working' ? h('span', { class: 'spin', 'aria-hidden': 'true' }) : null,
+        h('span', { text: label }),
+        h('span', { class: 'pill', text: btn })
+      ]);
+      show(n, 0);
+      Floating.block(true);
+    }
     return {
+      clear: clear,
+      working: function (onOpen) { sticky('is-working', 'پرتره‌ات در حال ساخت است…', 'دیدن', onOpen); },
+      failed: function (onOpen) { sticky('is-failed', 'ساخت کامل نشد؛ اعتبارت برگشت', 'دوباره', onOpen); },
       say: function (msg) { show(h('div', { class: 'toast', role: 'status', text: msg }), 3500); },
       ready: function (onOpen) {
         var n = h('div', { class: 'toast', role: 'status' }, [
           h('span', { text: 'پرتره‌ات آماده است' }),
-          h('button', { type: 'button', class: 'pill', onclick: function () { n.remove(); onOpen(); }, text: 'ببین' })
+          h('button', { type: 'button', class: 'pill', onclick: function () { clear(); onOpen(); }, text: 'ببین' })
         ]);
         show(n, 0);
+        Floating.block(true);
       }
     };
   })();
@@ -1361,6 +1417,7 @@
       pending.forEach(mount);
     }
     Flow.resumeAfterPayment();
+    Flow.resumeJob();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

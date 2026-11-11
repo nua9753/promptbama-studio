@@ -4,7 +4,7 @@ Tags: ai, portrait, image generation, widget, persian
 Requires at least: 6.0
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.8.1
 License: GPLv2 or later
 
 ویجت ساخت پرتره با هوش مصنوعی داخل مقاله‌های سایت شما، متصل به پرامپت باما.

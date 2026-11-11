@@ -3,7 +3,7 @@
  * Plugin Name:       PromptBama Studio — استودیو عکس هوش مصنوعی
  * Plugin URI:        https://promptbama.com
  * Description:       ویجت ساخت پرتره با هوش مصنوعی داخل مقاله‌ها. کاربر بدون ترک سایت شما استایل انتخاب می‌کند، سلفی می‌دهد، پرداخت می‌کند و پرتره‌اش را می‌گیرد. همه‌ی پردازش، کیف‌پول و پرداخت روی پرامپت باما انجام می‌شود.
- * Version:           1.8.0
+ * Version:           1.8.1
  * Update URI:        https://github.com/nua9753/promptbama-studio
  * Requires at least: 6.0
  * Requires PHP:      7.4
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'PBS_VERSION', '1.8.0' );
+define( 'PBS_VERSION', '1.8.1' );
 define( 'PBS_FILE', __FILE__ );
 define( 'PBS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PBS_URL', plugin_dir_url( __FILE__ ) );
