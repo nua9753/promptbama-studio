@@ -366,8 +366,8 @@
       }
       var card = h('section', { class: 'c-card', 'aria-label': (TC.legend || 'استودیو تصویرسازی') + ' — ساخت عکس با چهره‌ی خودتان' }, [
         h('span', { class: 'c-legend' }, [icon('camera', 16), TC.legend || 'استودیو تصویرسازی']),
-        h('h2', { class: 'c-title', text: TC.title || 'یک عکس ساده بفرستید؛ عکس یادگاری زیبا تحویل بگیرید.' }),
-        h('p', { class: 'c-sub', text: TC.sub || 'پرتره‌ی رسمی، عکس خانوادگی یا هر طرحی که دوست دارید، با چهره‌ی خودتان.' }),
+        h('h2', { class: 'c-title', text: TC.title || 'همان عکسی که همیشه دلتان می‌خواست، با چهره‌ی خودتان' }),
+        h('p', { class: 'c-sub', text: TC.sub || 'فقط یک عکس ساده از خودتان بفرستید؛ چند دقیقه بعد یک پرتره‌ی رسمی، عکس خانوادگی یا قاب یادگاری تحویل بگیرید که دلتان بخواهد قابش کنید.' }),
         state.cats.length > 1 ? h('div', { class: 'c-chips', role: 'tablist', 'aria-label': 'نوع عکس' }, state.cats.map(function (c) {
           return h('button', { type: 'button', role: 'tab', class: 'c-chip', 'aria-selected': c.slug === state.cat ? 'true' : 'false', onclick: function () { chooseCat(c.slug); }, text: c.name });
         })) : null,
@@ -379,7 +379,7 @@
             T.guarantee ? h('li', {}, [icon('check', 18), C.supportUrl ? h('a', { href: C.supportUrl, target: '_blank', rel: 'noopener', text: T.guarantee }) : h('span', { text: T.guarantee })]) : null,
             T.social ? h('li', {}, [h('span', { class: 'social-dot', 'aria-hidden': 'true' }), h('span', { text: faDigits(T.social) })]) : null
           ]),
-          h('button', { type: 'button', class: 'c-cta', disabled: !picked() ? true : null, onclick: start, text: TC.cta || 'عکس خودم را بسازم' })
+          h('button', { type: 'button', class: 'c-cta', disabled: !picked() ? true : null, onclick: start, text: TC.cta || 'این عکس را با چهره‌ی من بسازید' })
         ]),
         brandLine()
       ]);
@@ -636,9 +636,10 @@
     // screen so the user can always get back to it after minimizing.
     function backgroundPill() {
       if (!f || openState) return;
-      if (f.step === 'gen' && f.failed) { Toast.failed(function () { reopen('gen'); }); return; }
+      var c = f.variant === 'c';
+      if (f.step === 'gen' && f.failed) { Toast.failed(function () { reopen('gen'); }, c); return; }
       if (f.step === 'gen' && (f.busy || (f.job && f.job.status !== 'COMPLETED'))) {
-        Toast.working(function () { reopen('gen'); });
+        Toast.working(function () { reopen('gen'); }, c);
       }
     }
 
@@ -671,6 +672,9 @@
     function setError(msg) { f.error = msg; f.busy = false; render(); }
 
     /* ---------- frame ---------- */
+
+    // Design C speaks to an older audience: formal «شما» and warmer words.
+    function cx(base, warm) { return f && f.variant === 'c' ? warm : base; }
 
     function frame(opts, body, footer) {
       var prevMini = mountEl.querySelector('.mini-rail');
@@ -910,7 +914,7 @@
       var boxes = [photoBox(people, selfies)];
       var complete = picks().length >= people;
       frame(
-        { title: 'استایلت را انتخاب کن', stepLabel: 'قدم ۱ از ۳', dark: true, keepScroll: true },
+        { title: cx('استایلت را انتخاب کن', 'کدام قاب، قصه‌ی شماست؟'), stepLabel: 'قدم ۱ از ۳', dark: true, keepScroll: true },
         [rail].concat(boxes).concat([privacyLine()]),
         [cta('ادامه', function () {
           if (!complete) { setError(people > 1 ? 'از هر ' + (people === 2 ? 'دو' : 'سه') + ' نفر یک عکس اضافه کن.' : 'اول یک سلفی اضافه کن.'); return; }
@@ -965,8 +969,8 @@
       }
       frame(
         {
-          title: f.exists === null ? 'پرتره‌ات را کجا نگه داریم؟' : f.exists ? 'خوش برگشتی' : 'یک رمز بگذار و تمام',
-          sub: f.exists === null ? 'با شماره موبایلت یک حساب ساده می‌سازیم تا پرتره‌ها و اعتبارت همیشه در دسترست باشد.' : null,
+          title: f.exists === null ? cx('پرتره‌ات را کجا نگه داریم؟', 'عکس‌هایتان را کجا برایتان نگه داریم؟') : f.exists ? cx('خوش برگشتی', 'خوش برگشتید') : cx('یک رمز بگذار و تمام', 'یک رمز بگذارید؛ همین.'),
+          sub: f.exists === null ? cx('با شماره موبایلت یک حساب ساده می‌سازیم تا پرتره‌ها و اعتبارت همیشه در دسترست باشد.', 'با شماره موبایلتان یک حساب ساده می‌سازیم تا عکس‌های یادگاری‌تان همیشه امن و در دسترس بمانند.') : null,
           stepLabel: 'قدم ۲ از ۳', dark: true, back: function () { go('style'); }
         },
         [h('form', { class: 'form', onsubmit: function (e) { e.preventDefault(); var b = sheet.querySelector('.sheet-foot .cta'); if (b) b.click(); } }, body.concat([h('button', { type: 'submit', class: 'sr', tabindex: '-1', 'aria-hidden': 'true' })]))],
@@ -1068,7 +1072,7 @@
       }
 
       frame(
-        { title: 'پرتره‌ات یک قدم با تو فاصله دارد', stepLabel: 'قدم آخر', dark: true, keepScroll: true, back: function () { go('style'); } },
+        { title: cx('پرتره‌ات یک قدم با تو فاصله دارد', 'عکس یادگاری‌تان یک قدم با شما فاصله دارد'), stepLabel: 'قدم آخر', dark: true, keepScroll: true, back: function () { go('style'); } },
         [
           h('div', { class: 'pay-hero' }, [h('img', { src: f.style.largeUrl || f.style.imageUrl, alt: '', decoding: 'async' }), h('span', { class: 'pay-hero-tag', text: f.style.title + ' · با چهره‌ی تو' })]),
           list,
@@ -1076,7 +1080,7 @@
           h('p', { class: 'muted small', text: 'اعتبار باقی‌مانده در حسابت می‌ماند. ساخت ناموفق؟ اعتبارت خودکار برمی‌گردد.' })
         ],
         [
-          cta('بساز، همین الان', function () { pay(chosen, disc); }, { trail: toman(finalTotal), icon: 'lock' }),
+          cta(cx('بساز، همین الان', 'همین حالا بسازید'), function () { pay(chosen, disc); }, { trail: toman(finalTotal), icon: 'lock' }),
           h('p', { class: 'muted small center', text: 'پرداخت امن با درگاه زیبال؛ بعد از پرداخت به همین صفحه برمی‌گردی.' })
         ]
       );
@@ -1172,7 +1176,7 @@
             ssSet(JOB_KEY, null);
             loadMe().then(function () {
               if (openState) go('done');
-              else Toast.ready(function () { reopen('done'); });
+              else Toast.ready(function () { reopen('done'); }, f.variant === 'c');
             });
             return;
           }
@@ -1207,23 +1211,23 @@
       f.shownStatus = status;
       if (f.failed) {
         frame(
-          { title: 'این بار ساخت کامل نشد', dark: true },
-          [h('p', { class: 'sheet-sub', text: 'نگران نباش؛ اعتبارت خودکار برگشت. می‌توانی دوباره امتحان کنی یا استایل دیگری انتخاب کنی.' })],
+          { title: cx('این بار ساخت کامل نشد', 'این بار عکس آن‌طور که باید نشد'), dark: true },
+          [h('p', { class: 'sheet-sub', text: cx('نگران نباش؛ اعتبارت خودکار برگشت. می‌توانی دوباره امتحان کنی یا استایل دیگری انتخاب کنی.', 'نگران نباشید؛ اعتبارتان خودکار برگشت. یک بار دیگر امتحان کنید یا طرح دیگری انتخاب کنید.') })],
           [cta('دوباره بساز', function () { f.failed = false; startGeneration(); }), h('button', { type: 'button', class: 'ghost', onclick: function () { f.failed = false; go('style'); }, text: 'انتخاب استایل دیگر' })]
         );
         return;
       }
       frame(
-        { title: 'پرتره‌ات در حال ساخت است', sub: 'معمولاً کمتر از یک دقیقه طول می‌کشد', dark: true, minimize: true },
+        { title: cx('پرتره‌ات در حال ساخت است', 'داریم عکس یادگاری‌تان را می‌سازیم'), sub: cx('معمولاً کمتر از یک دقیقه طول می‌کشد', 'معمولاً کمتر از یک دقیقه؛ چیزی که منتظرش بودید در راه است.'), dark: true, minimize: true },
         [
-          f.paidNotice ? h('div', { class: 'paid', role: 'status' }, [icon('check', 18), h('span', { text: 'پرداخت با موفقیت انجام شد؛ داریم عکست را می‌سازیم.' })]) : null,
+          f.paidNotice ? h('div', { class: 'paid', role: 'status' }, [icon('check', 18), h('span', { text: cx('پرداخت با موفقیت انجام شد؛ داریم عکست را می‌سازیم.', 'پرداخت با موفقیت انجام شد؛ داریم عکستان را می‌سازیم.') })]) : null,
           h('div', { class: 'gen-art' }, [h('img', { src: f.style.largeUrl || f.style.imageUrl, alt: '', decoding: 'async' }), h('span', { class: 'scan', 'aria-hidden': 'true' })]),
           h('ul', { class: 'stages' }, [
             h('li', { class: 'done' }, [icon('check', 16), 'سلفی دریافت شد']),
             h('li', { class: status !== 'QUEUED' ? 'done' : 'now' }, [status !== 'QUEUED' ? icon('check', 16) : h('span', { class: 'spin' }), 'چهره‌ات شناسایی شد']),
             h('li', { class: status === 'PROCESSING' ? 'now' : '' }, [h('span', { class: 'spin' }), 'اعمال استایل ' + f.style.title])
           ]),
-          h('p', { class: 'box muted small', text: 'لازم نیست منتظر بمانی. پنجره را کوچک کن و مطلب را بخوان؛ آماده که شد همین‌جا خبرت می‌کنیم.' })
+          h('p', { class: 'box muted small', text: cx('لازم نیست منتظر بمانی. پنجره را کوچک کن و مطلب را بخوان؛ آماده که شد همین‌جا خبرت می‌کنیم.', 'لازم نیست منتظر بمانید. پنجره را کوچک کنید و مطلب را بخوانید؛ آماده که شد همین‌جا خبرتان می‌کنیم.') })
         ],
         null
       );
@@ -1241,7 +1245,7 @@
       }
       return h('div', { class: 'box' }, [
         h('div', { class: 'box-head' }, [
-          h('strong', { text: 'این‌ها هم به چهره‌ات می‌آید' }),
+          h('strong', { text: cx('این‌ها هم به چهره‌ات می‌آید', 'این قاب‌ها هم به شما می‌آید') }),
           credits > 0 ? h('span', { class: 'muted small', text: fa(credits) + ' اعتبار داری' }) : null
         ]),
         h('div', { class: 'mini-rail' }, others.map(function (s) {
@@ -1256,6 +1260,35 @@
     function stepDone() {
       var outs = (f.job && f.job.outputs) || [];
       var credits = f.me ? Number(f.me.imageCredits || 0) : 0;
+      function grab(url) {
+        return fetch(url).then(function (r) { if (!r.ok) throw new Error('fetch'); return r.blob(); }).then(function (blob) {
+          var ext = /png/.test(blob.type) ? 'png' : /webp/.test(blob.type) ? 'webp' : 'jpg';
+          return new File([blob], 'portrait-' + Date.now() + '.' + ext, { type: blob.type || 'image/jpeg' });
+        });
+      }
+      function saveFile(file) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(file); a.download = file.name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      }
+      // Save to gallery: download the file itself. On iPhone/iPad a download
+      // lands in Files, so open the share sheet there («Save Image» → Photos).
+      var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var saveBtn = outs[0] ? h('button', { type: 'button', class: 'cta', disabled: f.saving ? true : null, onclick: function () {
+        f.saving = true; render();
+        grab(outs[0].url).then(function (file) {
+          f.saving = false; render();
+          if (isIOS && navigator.canShare && navigator.canShare({ files: [file] })) {
+            return navigator.share({ files: [file] }).catch(function () {});
+          }
+          saveFile(file);
+          Toast.say(cx('عکس در گالری‌ات ذخیره شد.', 'عکس در گالری شما ذخیره شد.'));
+        }).catch(function () {
+          f.saving = false; render();
+          setError(cx('دانلود انجام نشد؛ یک بار دیگر بزن.', 'دانلود انجام نشد؛ لطفاً یک بار دیگر بزنید.'));
+        });
+      } }, [icon('down', 18), h('span', { text: f.saving ? 'در حال ذخیره…' : 'ذخیره در گالری' })]) : null;
       // Share the portrait itself (as an image file), not the article link.
       var shareBtn = outs[0] ? h('button', { type: 'button', class: 'ghost', disabled: f.sharing ? true : null, onclick: function () {
         f.sharing = true; render();
@@ -1266,35 +1299,32 @@
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
             return navigator.share({ files: [file], title: 'پرتره‌ی من' }).catch(function () {});
           }
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(blob); a.download = file.name;
-          document.body.appendChild(a); a.click(); a.remove();
-          setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-          Toast.say('عکس ذخیره شد؛ از گالری برای دوستانت بفرست.');
+          saveFile(file);
+          Toast.say(cx('عکس ذخیره شد؛ از گالری برای دوستانت بفرست.', 'عکس ذخیره شد؛ از گالری برای عزیزانتان بفرستید.'));
         }).catch(function () {
           f.sharing = false; render();
           window.open(outs[0].url, '_blank', 'noopener');
         });
-      } }, [icon('share', 18), f.sharing ? 'آماده‌سازی…' : 'ارسال برای دوستان']) : null;
+      } }, [icon('share', 18), f.sharing ? 'آماده‌سازی…' : cx('ارسال برای دوستان', 'ارسال برای عزیزان')]) : null;
 
       frame(
-        { title: 'پرتره‌ات آماده است', sub: f.style.title + ' · کیفیت کامل', dark: true },
+        { title: cx('پرتره‌ات آماده است', 'همان عکسی که می‌خواستید، آماده است'), sub: f.style.title + ' · کیفیت کامل', dark: true },
         [
           h('div', { class: 'results' }, outs.map(function (o) {
-            return h('a', { class: 'result', href: o.url, target: '_blank', rel: 'noopener' }, h('img', { src: o.url, alt: 'پرتره‌ی ساخته‌شده' }));
+            return h('div', { class: 'result' }, h('img', { src: o.url, alt: 'پرتره‌ی ساخته‌شده' }));
           })),
           h('div', { class: 'row-gap' }, [
-            outs[0] ? h('a', { class: 'cta as-link', href: outs[0].url, target: '_blank', rel: 'noopener', download: 'portrait.jpg' }, [icon('down', 18), h('span', { text: 'ذخیره‌ی پرتره' })]) : null,
+            saveBtn,
             shareBtn
           ]),
           h('a', { class: 'saved', href: String(C.apiBase).replace(/\/$/, '') + '/dashboard/generations', target: '_blank', rel: 'noopener' }, [
             h('span', { class: 'saved-ic' }, icon('check', 16)),
-            h('span', { class: 'saved-txt' }, [h('strong', { text: 'در حساب پرامپت بامای تو ذخیره شد' }), h('small', { text: 'هر وقت خواستی با همین شماره وارد شو و دوباره دانلودش کن' })]),
+            h('span', { class: 'saved-txt' }, [h('strong', { text: cx('در حساب پرامپت بامای تو ذخیره شد', 'در حساب پرامپت بامای شما ذخیره شد') }), h('small', { text: cx('هر وقت خواستی با همین شماره وارد شو و دوباره دانلودش کن', 'هر وقت خواستید با همین شماره وارد شوید و دوباره دانلودش کنید') })]),
             h('span', { class: 'saved-go', text: 'مشاهده' })
           ]),
           suggestBox(credits),
           C.supportUrl ? h('a', { class: 'unhappy', href: C.supportUrl, target: '_blank', rel: 'noopener' }, [
-            h('span', { text: 'از نتیجه راضی نیستی؟' }), h('strong', { text: 'در تلگرام پیام بده' })
+            h('span', { text: cx('از نتیجه راضی نیستی؟', 'دقیقاً همانی نشد که می‌خواستید؟') }), h('strong', { text: cx('در تلگرام پیام بده', 'در تلگرام بگویید تا درستش کنیم') })
           ]) : null,
           f.selfieId ? h('button', { type: 'button', class: 'link small', onclick: function () {
             api('DELETE', '/selfies/' + encodeURIComponent(f.selfieId)).then(function () {
@@ -1372,8 +1402,8 @@
       if (ms) timer = setTimeout(function () { node.remove(); }, ms);
     }
     function clear() { clearTimeout(timer); Floating.block(false); if (root) root.querySelectorAll('.toast').forEach(function (n) { n.remove(); }); }
-    function sticky(cls, label, btn, onOpen) {
-      var n = h('button', { type: 'button', class: 'toast toast-job ' + cls, role: 'status', onclick: function () { clear(); onOpen(); } }, [
+    function sticky(cls, label, btn, onOpen, light) {
+      var n = h('button', { type: 'button', class: 'toast toast-job ' + cls + (light ? ' is-light' : ''), role: 'status', onclick: function () { clear(); onOpen(); } }, [
         cls === 'is-working' ? h('span', { class: 'spin', 'aria-hidden': 'true' }) : null,
         h('span', { text: label }),
         h('span', { class: 'pill', text: btn })
@@ -1383,12 +1413,12 @@
     }
     return {
       clear: clear,
-      working: function (onOpen) { sticky('is-working', 'پرتره‌ات در حال ساخت است…', 'دیدن', onOpen); },
-      failed: function (onOpen) { sticky('is-failed', 'ساخت کامل نشد؛ اعتبارت برگشت', 'دوباره', onOpen); },
+      working: function (onOpen, light) { sticky('is-working', light ? 'عکس شما در حال ساخت است…' : 'پرتره‌ات در حال ساخت است…', 'دیدن', onOpen, light); },
+      failed: function (onOpen, light) { sticky('is-failed', light ? 'ساخت کامل نشد؛ اعتبارتان برگشت' : 'ساخت کامل نشد؛ اعتبارت برگشت', 'دوباره', onOpen, light); },
       say: function (msg) { show(h('div', { class: 'toast', role: 'status', text: msg }), 3500); },
-      ready: function (onOpen) {
-        var n = h('div', { class: 'toast', role: 'status' }, [
-          h('span', { text: 'پرتره‌ات آماده است' }),
+      ready: function (onOpen, light) {
+        var n = h('div', { class: 'toast' + (light ? ' is-light' : ''), role: 'status' }, [
+          h('span', { text: light ? 'عکس شما آماده است' : 'پرتره‌ات آماده است' }),
           h('button', { type: 'button', class: 'pill', onclick: function () { clear(); onOpen(); }, text: 'ببین' })
         ]);
         show(n, 0);

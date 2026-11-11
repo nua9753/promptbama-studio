@@ -379,3 +379,6 @@ input:focus { border-color: var(--a); outline: none; }
 .mini-more-ic { width: 40px; height: 40px; border-radius: 999px; border: 2px solid currentColor; display: inline-flex; align-items: center; justify-content: center; }
 .sheet { max-height: 94dvh; }
 .sheet-body { overscroll-behavior: contain; scroll-padding-bottom: 120px; }
+.toast.is-light { background: #ffffff; color: #111827; border-color: #e5e7eb; box-shadow: 0 12px 32px rgba(17,24,39,.18); }
+.toast.is-light .pill { color: #ffffff; }
+.toast.is-light .spin { border-color: rgba(15,92,82,.2); border-top-color: var(--a); }
