@@ -567,61 +567,114 @@
     }
     function hasFace(idx) { var sel = selOf(idx); return Boolean(sel && (sel.selfieId || sel.lid)); }
 
-    function facePicker(idx, people, selfies) {
-      var sel = selOf(idx);
-      var inputId = 'pbs-file-' + idx;
-      var name = idx === 0 ? (people > 1 ? 'نفر اول (تو)' : 'سلفی‌ات را اضافه کن') : (idx === 1 ? 'نفر دوم' : 'نفر سوم');
-      var inp = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, class: 'sr', id: inputId, onchange: function (e) {
+    /* One photo box for everyone. The user taps photos to pick them; for a
+       two/three-person style the picks are numbered (person 1, 2, 3). */
+    function picks() {
+      var out = [];
+      if (f.selfieId || f.lid) out.push({ selfieId: f.selfieId, lid: f.lid });
+      f.others.forEach(function (o) { if (o && (o.selfieId || o.lid)) out.push({ selfieId: o.selfieId, lid: o.lid }); });
+      return out;
+    }
+    function setPicks(list) {
+      var p0 = list[0] || {};
+      f.selfieId = p0.selfieId || null; f.lid = p0.lid || null;
+      f.others = list.slice(1).map(function (x) { return { selfieId: x.selfieId || null, lid: x.lid || null }; });
+    }
+    function sameRef(a, b) { return (a.selfieId && a.selfieId === b.selfieId) || (a.lid && a.lid === b.lid); }
+    function togglePick(ref, people) {
+      var list = picks();
+      var at = -1;
+      list.forEach(function (x, i) { if (sameRef(x, ref)) at = i; });
+      if (at !== -1) { list.splice(at, 1); }
+      else if (people === 1) { list = [ref]; }
+      else if (list.length < people) { list.push(ref); }
+      else { list[list.length - 1] = ref; }
+      setPicks(list.slice(0, people));
+    }
+    function pickIndex(ref) {
+      var list = picks(), at = -1;
+      list.forEach(function (x, i) { if (sameRef(x, ref)) at = i; });
+      return at;
+    }
+    var ORD = ['۱', '۲', '۳'];
+    var WHO = ['نفر اول', 'نفر دوم', 'نفر سوم'];
+
+    function photoBox(people, selfies) {
+      var list = picks();
+      if (list.length > people) { setPicks(list.slice(0, people)); list = picks(); }
+      var inp = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, class: 'sr', id: 'pbs-file', onchange: function (e) {
         var files = Array.prototype.slice.call((e.target.files || []));
-        var first = null;
         files.forEach(function (file) {
           if (file.size > 25 * 1024 * 1024) { setError('حجم عکس زیاد است (حداکثر ۲۵ مگابایت).'); return; }
           var item = { lid: 'l' + (++lidSeq), file: file, preview: URL.createObjectURL(file) };
           f.locals.push(item);
-          if (!first) first = item;
+          var cur = picks();
+          if (people === 1) setPicks([{ lid: item.lid }]);
+          else if (cur.length < people) { cur.push({ lid: item.lid }); setPicks(cur); }
         });
         e.target.value = '';
-        if (first) { setSel(idx, null, first.lid); track('selfie', f.variant, true); }
-        render();
+        f.addedMany = f.locals.length > 1 || files.length > 1;
+        if (files.length) track('selfie', f.variant, true);
+        setError(''); render();
       } });
+
+      function thumb(ref, src, onRemove, removeLabel) {
+        var at = pickIndex(ref);
+        var on = at !== -1;
+        return h('span', { class: 'selfie-wrap' }, [
+          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false',
+            'aria-label': on && people > 1 ? 'عکس ' + WHO[at] : 'انتخاب این عکس',
+            onclick: function () { togglePick(ref, people); render(); } }, [
+            h('img', { src: src, alt: '' }),
+            on && people > 1 ? h('span', { class: 'pick-no', text: ORD[at] }) : null
+          ]),
+          h('button', { type: 'button', class: 'selfie-x', 'aria-label': removeLabel, disabled: f.removing ? true : null, onclick: onRemove }, icon('close', 14))
+        ]);
+      }
       var items = [];
       f.locals.forEach(function (it) {
-        var on = sel.lid === it.lid;
-        items.push(h('span', { class: 'selfie-wrap' }, [
-          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : '') + (!on && usedBy(idx, null, it.lid) ? ' is-taken' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'انتخاب این عکس', onclick: function () { setSel(idx, null, it.lid); render(); } }, [h('img', { src: it.preview, alt: '' })]),
-          h('button', { type: 'button', class: 'selfie-x', 'aria-label': 'برداشتن این عکس', onclick: function () {
-            URL.revokeObjectURL(it.preview);
-            f.locals = f.locals.filter(function (x) { return x.lid !== it.lid; });
-            releaseLocal(it.lid); setError(''); render();
-          } }, icon('close', 14))
-        ]));
+        items.push(thumb({ lid: it.lid }, it.preview, function () {
+          URL.revokeObjectURL(it.preview);
+          f.locals = f.locals.filter(function (x) { return x.lid !== it.lid; });
+          setPicks(picks().filter(function (x) { return x.lid !== it.lid; }));
+          setError(''); render();
+        }, 'برداشتن این عکس'));
       });
       selfies.forEach(function (sf) {
-        var on = sel.selfieId === sf.id;
-        items.push(h('span', { class: 'selfie-wrap' }, [
-          h('button', { type: 'button', class: 'selfie' + (on ? ' is-on' : '') + (!on && usedBy(idx, sf.id, null) ? ' is-taken' : ''), 'aria-pressed': on ? 'true' : 'false', 'aria-label': 'انتخاب این سلفی', onclick: function () { setSel(idx, sf.id, null); render(); } }, [h('img', { src: sf.url, alt: '' })]),
-          h('button', { type: 'button', class: 'selfie-x', 'aria-label': 'حذف این سلفی از حسابم', disabled: f.removing ? true : null, onclick: function () {
-            f.removing = true; render();
-            api('DELETE', '/selfies/' + encodeURIComponent(sf.id)).then(function () {
-              releaseSelfie(sf.id);
-              return loadMe();
-            }).then(function () {
-              f.removing = false; setError(''); render(); Toast.say('سلفی پاک شد.');
-            }).catch(function (e) { f.removing = false; setError(friendly(e)); });
-          } }, icon('close', 14))
-        ]));
+        items.push(thumb({ selfieId: sf.id }, sf.url, function () {
+          f.removing = true; render();
+          api('DELETE', '/selfies/' + encodeURIComponent(sf.id)).then(function () {
+            setPicks(picks().filter(function (x) { return x.selfieId !== sf.id; }));
+            return loadMe();
+          }).then(function () {
+            f.removing = false; setError(''); render(); Toast.say('سلفی پاک شد.');
+          }).catch(function (e) { f.removing = false; setError(friendly(e)); });
+        }, 'حذف این سلفی از حسابم'));
       });
-      items.push(h('label', { class: 'selfie add', for: inputId }, [icon('camera', 20), h('span', { text: items.length ? 'عکس دیگر' : 'عکس بگیر یا انتخاب کن' })]));
-      var ready = hasFace(idx);
+      items.push(h('label', { class: 'selfie add', for: 'pbs-file' }, [icon('camera', 20), h('span', { text: items.length ? 'عکس دیگر' : 'عکس بگیر یا انتخاب کن' })]));
+
+      // Guidance that matches what they picked.
+      var count = list.length;
+      var total = f.locals.length + selfies.length;
+      var hint;
+      if (people > 1 && count < people) {
+        hint = { cls: 'hint is-warn', text: 'این طرح ' + (people === 2 ? 'دونفره' : 'سه‌نفره') + ' است؛ عکس ' + WHO[count] + ' را هم اضافه یا انتخاب کن.' };
+      } else if (people > 1) {
+        hint = { cls: 'hint is-ok', text: 'عکس‌ها به ترتیب شماره برای ' + WHO.slice(0, people).join('، ') + ' استفاده می‌شوند.' };
+      } else if (total > 1 && f.addedMany) {
+        hint = { cls: 'hint', text: 'این طرح تک‌نفره است و فقط عکسِ تیک‌خورده استفاده می‌شود. برای عکس دونفره یک طرح «دونفره» انتخاب کن.' };
+      }
       return h('div', { class: 'box' }, [
         h('div', { class: 'box-head' }, [
-          h('strong', { text: name }),
-          people > 1 && ready ? h('span', { class: 'ok-chip' }, [icon('check', 12), 'آماده'])
-            : h('span', { class: 'muted', text: people > 1 ? 'یک عکس واضح از صورت' : 'یک عکس کافی است' })
+          h('strong', { text: people > 1 ? 'عکس هر ' + (people === 2 ? 'دو' : 'سه') + ' نفر' : 'سلفی‌ات را اضافه کن' }),
+          people > 1
+            ? h('span', { class: count >= people ? 'ok-chip' : 'muted' }, count >= people ? [icon('check', 12), 'آماده'] : [fa(count) + ' از ' + fa(people)])
+            : h('span', { class: 'muted', text: 'یک عکس کافی است' })
         ]),
         h('div', { class: 'selfies' }, items),
         inp,
-        idx === 0 ? h('p', { class: 'muted small', text: 'نور روشن، صورت از روبه‌رو و بدون عینک آفتابی؛ نتیجه شبیه‌تر می‌شود.' }) : null
+        hint ? h('p', { class: hint.cls, role: 'status', text: hint.text }) : null,
+        h('p', { class: 'muted small', text: 'نور روشن، صورت از روبه‌رو و بدون عینک آفتابی؛ نتیجه شبیه‌تر می‌شود.' })
       ]);
     }
 
@@ -635,12 +688,8 @@
       }));
 
       var people = peopleOf(f.style);
-      var boxes = [];
-      var complete = true;
-      for (var i = 0; i < people; i++) {
-        boxes.push(facePicker(i, people, selfies));
-        if (!hasFace(i)) complete = false;
-      }
+      var boxes = [photoBox(people, selfies)];
+      var complete = picks().length >= people;
       frame(
         { title: 'استایلت را انتخاب کن', stepLabel: 'قدم ۱ از ۳', dark: true, keepScroll: true },
         [rail].concat(boxes).concat([privacyLine()]),
@@ -759,7 +808,7 @@
         var on = x.id === f.pack;
         return h('button', { type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', class: 'pack' + (on ? ' is-on' : ''), onclick: function () { f.pack = x.id; if (f.disc) { applyCode(); } else { render(); } } }, [
           h('span', { class: 'pack-main' }, [
-            h('span', { class: 'pack-title' }, [x.title, x.badge ? h('span', { class: 'badge', text: 'به‌صرفه‌ترین' }) : null]),
+            h('span', { class: 'pack-title' }, [x.title, x.badge ? h('span', { class: 'badge', text: 'خیلی به‌صرفه' }) : null]),
             h('span', { class: 'pack-save', text: x.save })
           ]),
           h('span', { class: 'pack-price' }, [h('strong', { text: fa(Math.round(x.per / 1000)) }), h('small', { text: 'هزار تومان / هر پرتره' })])
@@ -967,9 +1016,26 @@
     function stepDone() {
       var outs = (f.job && f.job.outputs) || [];
       var credits = f.me ? Number(f.me.imageCredits || 0) : 0;
-      var shareBtn = navigator.share ? h('button', { type: 'button', class: 'ghost', onclick: function () {
-        navigator.share({ title: 'پرتره‌ی من', text: 'این پرتره را با هوش مصنوعی ساختم', url: location.href.split('?')[0] }).catch(function () {});
-      } }, [icon('share', 18), 'ارسال برای دوستان']) : null;
+      // Share the portrait itself (as an image file), not the article link.
+      var shareBtn = outs[0] ? h('button', { type: 'button', class: 'ghost', disabled: f.sharing ? true : null, onclick: function () {
+        f.sharing = true; render();
+        fetch(outs[0].url).then(function (r) { if (!r.ok) throw new Error('fetch'); return r.blob(); }).then(function (blob) {
+          var ext = /png/.test(blob.type) ? 'png' : /webp/.test(blob.type) ? 'webp' : 'jpg';
+          var file = new File([blob], 'portrait.' + ext, { type: blob.type || 'image/jpeg' });
+          f.sharing = false; render();
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            return navigator.share({ files: [file], title: 'پرتره‌ی من' }).catch(function () {});
+          }
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = file.name;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+          Toast.say('عکس ذخیره شد؛ از گالری برای دوستانت بفرست.');
+        }).catch(function () {
+          f.sharing = false; render();
+          window.open(outs[0].url, '_blank', 'noopener');
+        });
+      } }, [icon('share', 18), f.sharing ? 'آماده‌سازی…' : 'ارسال برای دوستان']) : null;
 
       frame(
         { title: 'پرتره‌ات آماده است', sub: f.style.title + ' · کیفیت کامل', dark: true },
