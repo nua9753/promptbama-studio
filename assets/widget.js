@@ -268,6 +268,26 @@
   function socialLine() {
     return T.social ? h('p', { class: 'social' }, [h('span', { class: 'social-dot', 'aria-hidden': 'true' }), h('span', { text: faDigits(T.social) })]) : null;
   }
+  // Real user reviews set in the plugin settings (one per line: «متن | نام»).
+  function reviewsBlock(light) {
+    var list = (T.reviews || []).filter(function (r) { return r && r.text; });
+    if (!list.length) return null;
+    var cards = list.map(function (r) {
+      var name = r.name || '';
+      return h('figure', { class: 'rv' }, [
+        h('span', { class: 'rv-mark', 'aria-hidden': 'true', text: '”' }),
+        h('blockquote', { class: 'rv-text', text: r.text }),
+        name ? h('figcaption', { class: 'rv-by' }, [h('span', { class: 'rv-av', 'aria-hidden': 'true', text: name.trim().charAt(0) }), h('span', { text: name })]) : null
+      ]);
+    });
+    var rail = h('div', { class: 'rv-rail' + (list.length === 1 ? ' is-one' : '') }, cards);
+    var box = h('section', { class: 'rv-box' + (light ? ' is-light' : ''), 'aria-label': 'نظر کاربران' }, [
+      h('p', { class: 'rv-head', text: light ? 'نظر کسانی که عکسشان را ساخته‌اند' : 'از زبان کسانی که ساختند' }),
+      rail
+    ]);
+    return box;
+  }
+
   function brandLine() {
     return C.showBrand ? h('p', { class: 'brand' }, ['با فناوری ', h('a', { href: C.apiBase, target: '_blank', rel: 'noopener', text: 'پرامپت باما' })]) : null;
   }
@@ -337,7 +357,8 @@
       if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') host.style.setProperty('--pbs-c-legend-bg', bg);
     } catch (e) { /* ignore */ }
 
-    var state = { cats: [], cat: '', items: [], page: 0, hasMore: false, loading: true, picked: 0 };
+    var C_PAGE = 6;
+    var state = { cats: [], cat: '', items: [], page: 0, hasMore: false, loading: true, picked: 0, jumpTo: -1 };
 
     function picked() { return state.items[state.picked]; }
     function start() {
@@ -347,10 +368,12 @@
     }
     function loadMore() {
       state.loading = true; render();
-      getStylePage(state.cat, state.page + 1).then(function (d) {
+      getStylePage(state.cat, state.page + 1, C_PAGE).then(function (d) {
         var have = {};
+        var before = state.items.length;
         state.items.forEach(function (x) { have[x.slug] = 1; });
         d.styles.forEach(function (x) { if (!have[x.slug]) state.items.push(x); });
+        if (before && state.items.length > before) state.jumpTo = before;
         state.page += 1; state.hasMore = d.hasMore && d.styles.length > 0;
         state.loading = false; render();
       }).catch(function () { state.loading = false; render(); });
@@ -364,14 +387,17 @@
     function render() {
       var prevChips = wrap.querySelector('.c-chips');
       var keep = prevChips ? prevChips.scrollLeft : 0;
+      var prevRail = wrap.querySelector('.c-rail');
+      var keepRail = prevRail ? prevRail.scrollLeft : 0;
+      if (state.stop) state.stop();
       wrap.innerHTML = '';
       var grid;
       if (!state.items.length && state.loading) {
-        grid = h('div', { class: 'c-grid' }, [0, 1, 2, 3].map(function () { return h('span', { class: 'c-skel', 'aria-hidden': 'true' }); }));
+        grid = h('div', { class: 'c-rail' }, [0, 1, 2, 3, 4, 5].map(function () { return h('span', { class: 'c-skel', 'aria-hidden': 'true' }); }));
       } else if (!state.items.length) {
         grid = h('p', { class: 'c-empty', text: 'برای این دسته هنوز نمونه‌ای نداریم؛ یک دسته‌ی دیگر را ببینید.' });
       } else {
-        grid = h('div', { class: 'c-grid' }, state.items.map(function (s, i) {
+        grid = h('div', { class: 'c-rail', role: 'list' }, state.items.map(function (s, i) {
           var on = i === state.picked;
           return h('button', { type: 'button', class: 'c-item' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { state.picked = i; render(); } }, [
             h('span', { class: 'c-img' }, [
@@ -392,6 +418,7 @@
         })) : null,
         grid,
         state.hasMore ? h('button', { type: 'button', class: 'c-more', disabled: state.loading ? true : null, onclick: loadMore }, [icon('chevron', 16), state.loading ? 'در حال آوردن…' : 'مشاهده‌ی نمونه‌های بیشتر']) : null,
+        reviewsBlock(true),
         h('div', { class: 'c-foot' }, [
           h('ul', { class: 'c-trust' }, [
             h('li', {}, [icon('shield', 18), h('span', { text: T.privacy || 'عکس شما خصوصی می‌ماند و فقط در حساب خودتان است.' })]),
@@ -405,6 +432,21 @@
       wrap.appendChild(card);
       var chips = wrap.querySelector('.c-chips');
       if (chips && keep) chips.scrollLeft = keep;
+      var rail = wrap.querySelector('.c-rail');
+      if (rail && state.items.length) {
+        if (state.jumpTo >= 0 && rail.children[state.jumpTo]) {
+          var target = rail.children[state.jumpTo];
+          rail.scrollLeft = keepRail;
+          state.jumpTo = -1;
+          requestAnimationFrame(function () {
+            try { rail.scrollTo({ left: target.offsetLeft - rail.offsetLeft - (rail.clientWidth - target.offsetWidth), behavior: 'smooth' }); } catch (e) { /* ignore */ }
+            try { target.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); } catch (e) { /* ignore */ }
+          });
+        } else if (keepRail) {
+          rail.scrollLeft = keepRail;
+        }
+        autoScroll(rail, state);
+      }
     }
 
     render();
@@ -422,9 +464,9 @@
       // Start on the category mapped to this article, if it is one of the chips.
       var start = list.filter(function (c) { return c.slug === category; })[0];
       state.cat = start ? start.slug : '';
-      return getStylePage(state.cat, 1);
+      return getStylePage(state.cat, 1, C_PAGE);
     }).then(function (d) {
-      if (!d.styles.length && state.cat) { state.cat = ''; return getStylePage('', 1); }
+      if (!d.styles.length && state.cat) { state.cat = ''; return getStylePage('', 1, C_PAGE); }
       return d;
     }).then(function (d) {
       state.items = d.styles; state.page = 1; state.hasMore = d.hasMore; state.loading = false;
@@ -498,11 +540,9 @@
       }
 
       {
-        if (variant === 'b' && tx.quote) {
-          card.appendChild(h('figure', { class: 'quote' }, [
-            h('blockquote', { text: '«' + tx.quote + '»' }),
-            tx.quoteBy ? h('figcaption', { text: tx.quoteBy }) : null
-          ]));
+        if (variant === 'b') {
+          var rv = reviewsBlock(false);
+          if (rv) card.appendChild(rv);
         }
         card.appendChild(h('div', { class: 'foot' }, [
           h('button', { type: 'button', class: 'cta', disabled: loading || !picked() ? true : null, onclick: start }, [h('span', { text: ctaText() }), icon('arrow', 20)]),

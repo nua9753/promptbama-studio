@@ -200,6 +200,7 @@ class PBS_Frontend {
 						'quote'    => $o['testimonial_text'],
 						'quoteBy'  => $o['testimonial_name'],
 					),
+					'reviews'   => self::reviews( $o ),
 					'privacy'   => $o['privacy_text'],
 					'guarantee' => $o['guarantee_text'],
 					'social'    => (int) $o['social_count'] > 0 ? str_replace( '{n}', number_format_i18n( (int) $o['social_count'] ), $o['social_text'] ) : '',
@@ -207,5 +208,33 @@ class PBS_Frontend {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Real user reviews from the settings: one per line, «متن | نام».
+	 * A line without a name uses the separate «نام صاحب نظر» field (first line only).
+	 *
+	 * @param array $o Options.
+	 * @return array<int, array{text:string,name:string}>
+	 */
+	private static function reviews( $o ) {
+		$out   = array();
+		$lines = preg_split( '/\r\n|\r|\n/', (string) $o['testimonial_text'] );
+		foreach ( $lines as $i => $line ) {
+			$line = trim( $line );
+			if ( '' === $line ) {
+				continue;
+			}
+			$parts = array_map( 'trim', explode( '|', $line, 2 ) );
+			$text  = trim( (string) preg_replace( '/^[\s«"]+|[\s»"]+$/u', '', $parts[0] ) );
+			$name  = isset( $parts[1] ) ? $parts[1] : ( empty( $out ) ? (string) $o['testimonial_name'] : '' );
+			if ( '' !== $text ) {
+				$out[] = array( 'text' => $text, 'name' => $name );
+			}
+			if ( count( $out ) >= 8 ) {
+				break;
+			}
+		}
+		return $out;
 	}
 }

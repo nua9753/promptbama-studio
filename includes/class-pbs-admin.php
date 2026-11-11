@@ -434,10 +434,10 @@ class PBS_Admin {
 		self::row( __( 'زیرنویس قاب‌ها', 'promptbama-studio' ), self::textarea( 'b_captions', $o['b_captions'], 8 ), __( 'هر خط یک زیرنویس احساسی؛ به ترتیب زیر قاب‌ها می‌نشیند.', 'promptbama-studio' ) );
 		self::row( __( 'دکمه‌ی باز کردن', 'promptbama-studio' ), self::input( 'b_more', $o['b_more'] ), '', 'pbs-b_more' );
 		self::row( __( 'دکمه‌ی اصلی', 'promptbama-studio' ), self::input( 'b_cta', $o['b_cta'] ), '', 'pbs-b_cta' );
-		self::row( __( 'نظر کاربر', 'promptbama-studio' ), self::textarea( 'testimonial_text', $o['testimonial_text'], 2 ), __( 'فقط نظر واقعی و با اجازه‌ی خود کاربر. خالی = پنهان.', 'promptbama-studio' ) );
-		self::row( __( 'نام صاحب نظر', 'promptbama-studio' ), self::input( 'testimonial_name', $o['testimonial_name'] ), '', 'pbs-testimonial_name' );
 
 		echo '<tr><td colspan="2"><h2 class="pbs-h">' . esc_html__( 'مشترک', 'promptbama-studio' ) . '</h2></td></tr>';
+		self::row( __( 'نظرات کاربران', 'promptbama-studio' ), self::textarea( 'testimonial_text', $o['testimonial_text'], 5 ), __( 'هر خط یک نظر، به شکل «متن نظر | نام». در طرح دوم و سوم به‌صورت کارت‌های اسکرولی نشان داده می‌شود. فقط نظر واقعی و با اجازه‌ی خود کاربر. خالی = پنهان.', 'promptbama-studio' ) );
+		self::row( __( 'نام صاحب نظر (خط اول)', 'promptbama-studio' ), self::input( 'testimonial_name', $o['testimonial_name'] ), __( 'فقط اگر خط اول نام نداشت استفاده می‌شود.', 'promptbama-studio' ), 'pbs-testimonial_name' );
 		self::row( __( 'پیام حریم خصوصی', 'promptbama-studio' ), self::textarea( 'privacy_text', $o['privacy_text'], 2 ) );
 		self::row( __( 'متن تضمین کیفیت', 'promptbama-studio' ), self::input( 'guarantee_text', $o['guarantee_text'], 'text', 'class="large-text"' ), __( 'روی کارت نشان داده می‌شود. خالی = پنهان.', 'promptbama-studio' ) );
 		self::row( __( 'تعداد سازندگان', 'promptbama-studio' ), self::input( 'social_count', $o['social_count'], 'number', 'min="0" class="small-text"' ), __( 'عدد واقعی را بگذار و با آمار داشبورد به‌روز کن. ۰ = پنهان.', 'promptbama-studio' ) );
