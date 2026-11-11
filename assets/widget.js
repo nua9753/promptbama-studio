@@ -604,7 +604,8 @@
       ensureHost();
       lastFocus = document.activeElement;
       f = {
-        style: ctx.style, styles: ctx.styles || [ctx.style], variant: ctx.variant || 'a',
+        // The style picked on the card leads the step-1 rail, already selected.
+        style: ctx.style, styles: [ctx.style].concat((ctx.styles || []).filter(function (x) { return x && x.slug !== ctx.style.slug; })), variant: ctx.variant || 'a',
         category: ctx.category || '', selfieId: null, lid: null, locals: [], others: [],
         me: null, phone: '', exists: null, error: '', busy: false, job: null, pack: 'pack5'
       };
