@@ -173,7 +173,7 @@ img { display: block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) { .float { transition: none; } }
 
 /* -------------------------------- flow -------------------------------- */
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: center; }
+.overlay { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: center; }
 .sheet {
   width: 100%;
   max-width: 460px;
@@ -374,3 +374,8 @@ input:focus { border-color: var(--a); outline: none; }
 .is-light .float-thumbs img { border-color: #ffffff; }
 .is-light .float-go { background: #0f5c52; color: #ffffff; }
 .is-light .toast { background: #ffffff; color: #111827; border-color: #e5e7eb; }
+
+.mini-more { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 150px; border-style: dashed; color: var(--a); font-size: 12px; font-weight: 800; }
+.mini-more-ic { width: 40px; height: 40px; border-radius: 999px; border: 2px solid currentColor; display: inline-flex; align-items: center; justify-content: center; }
+.sheet { max-height: 94dvh; }
+.sheet-body { overscroll-behavior: contain; scroll-padding-bottom: 120px; }

@@ -168,16 +168,43 @@
     return stylesCache[key];
   }
 
+  /* Resize a phone photo to max 1600px JPEG (~200–400 KB) before upload; on
+     slow mobile networks the original multi-MB file was the main delay. */
+  function shrinkPhoto(file) {
+    return new Promise(function (resolve) {
+      if (!file || !/^image\//.test(file.type) || file.size < 450 * 1024 || !window.createImageBitmap && !window.FileReader) { resolve(file); return; }
+      var done = function (blob) { resolve(blob && blob.size < file.size ? new File([blob], 'selfie.jpg', { type: 'image/jpeg' }) : file); };
+      var draw = function (img, w, h) {
+        try {
+          var max = 1600, scale = Math.min(1, max / Math.max(w, h));
+          var c = document.createElement('canvas');
+          c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          c.toBlob(done, 'image/jpeg', 0.86);
+        } catch (e) { resolve(file); }
+      };
+      if (window.createImageBitmap) {
+        createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (bmp) { draw(bmp, bmp.width, bmp.height); }).catch(function () { resolve(file); });
+      } else {
+        var url = URL.createObjectURL(file), im = new Image();
+        im.onload = function () { draw(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(url); };
+        im.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+        im.src = url;
+      }
+    });
+  }
+
   var catsCache = null;
   function getCategories() {
     if (!catsCache) catsCache = api('GET', '/categories').then(function (d) { return (d && d.categories) || []; }).catch(function () { return []; });
     return catsCache;
   }
   var pageCache = {};
-  function getStylePage(cat, page) {
-    var key = (cat || '_') + ':' + page;
+  function getStylePage(cat, page, size) {
+    size = size || 4;
+    var key = (cat || '_') + ':' + page + ':' + size;
     if (!pageCache[key]) {
-      var q = '?limit=4&page=' + page + (cat ? '&cat=' + encodeURIComponent(cat) : '') + (C.stylesTag ? '&tag=' + encodeURIComponent(C.stylesTag) : '');
+      var q = '?limit=' + size + '&page=' + page + (cat ? '&cat=' + encodeURIComponent(cat) : '') + (C.stylesTag ? '&tag=' + encodeURIComponent(C.stylesTag) : '');
       pageCache[key] = api('GET', '/styles' + q).then(function (d) { return { styles: (d && d.styles) || [], hasMore: !!(d && d.hasMore) }; });
       pageCache[key].catch(function () { delete pageCache[key]; });
     }
@@ -535,7 +562,7 @@
   /* --------------------------------- flow --------------------------------- */
 
   var Flow = (function () {
-    var host = null, root = null, mountEl = null, sheet = null, lastFocus = null;
+    var host = null, root = null, mountEl = null, sheet = null, lastFocus = null, fitSheet = null;
     var f = null; // flow state
     var pollTimer = null;
     var openState = false;
@@ -549,6 +576,25 @@
       mountEl = h('div', { class: 'flow-mount' });
       root.appendChild(mountEl);
       root.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+      // Mobile keyboard: keep the sheet inside the visible area and the
+      // focused field in view, instead of letting the keyboard cover it.
+      var vv = window.visualViewport;
+      function fit() {
+        if (!vv || !openState) return;
+        host.style.top = vv.offsetTop + 'px';
+        host.style.height = vv.height + 'px';
+        host.style.bottom = 'auto';
+        var s = root.querySelector('.sheet');
+        if (s) s.style.maxHeight = Math.round(vv.height * 0.96) + 'px';
+      }
+      if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
+      fitSheet = fit;
+      root.addEventListener('focusin', function (e) {
+        var el = e.target;
+        if (!el || !/^(INPUT|TEXTAREA)$/.test(el.tagName) || el.type === 'file') return;
+        setTimeout(function () { fit(); try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (x) { /* ignore */ } }, 320);
+      });
     }
 
     function open(ctx, at) {
@@ -565,6 +611,7 @@
       host.style.display = 'block';
       document.documentElement.style.overflow = 'hidden';
       track('open', f.variant);
+      getConfig().then(function (cfg) { if (f) f.config = f.config || cfg; }).catch(function () {});
       if (at === false) return; // caller drives the next step
       if (token()) {
         loadMe().then(function () { go(at || 'style'); });
@@ -631,6 +678,7 @@
       mountEl.appendChild(overlay);
       var mini = mountEl.querySelector('.mini-rail');
       if (mini && keepMini) mini.scrollLeft = keepMini;
+      if (fitSheet) fitSheet();
       if (keepBody) content.scrollTop = keepBody;
       if (f._focusStep !== f.step) {
         f._focusStep = f.step;
@@ -811,6 +859,21 @@
       ]);
     }
 
+    function loadMoreStyles() {
+      if (f.moreBusy) return;
+      f.moreBusy = true; render();
+      var size = 8;
+      f.morePage = f.morePage || Math.floor(f.styles.length / size);
+      getStylePage('', f.morePage + 1, size).then(function (d) {
+        var have = {};
+        f.styles.forEach(function (x) { have[x.slug] = 1; });
+        d.styles.forEach(function (x) { if (!have[x.slug]) f.styles.push(x); });
+        f.morePage += 1;
+        f.noMore = !d.hasMore || !d.styles.length;
+        f.moreBusy = false; render();
+      }).catch(function () { f.moreBusy = false; render(); });
+    }
+
     function stepStyle() {
       var selfies = (f.me && f.me.selfies) || [];
       var rail = h('div', { class: 'mini-rail' }, f.styles.map(function (s) {
@@ -818,7 +881,10 @@
         return h('button', { type: 'button', class: 'mini' + (on ? ' is-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () { f.style = s; render(); } }, [
           h('span', { class: 'mini-img' }, [h('img', { src: s.imageUrl, alt: '', loading: 'lazy', decoding: 'async' }), peopleBadge(s)]), h('span', { text: s.title })
         ]);
-      }));
+      }).concat(f.noMore ? [] : [h('button', { type: 'button', class: 'mini mini-more', disabled: f.moreBusy ? true : null, onclick: loadMoreStyles }, [
+        h('span', { class: 'mini-more-ic' }, icon(f.moreBusy ? 'chevron' : 'plus', 22)),
+        h('span', { text: f.moreBusy ? 'در حال آوردن…' : 'طرح‌های بیشتر' })
+      ])]));
 
       var people = peopleOf(f.style);
       var boxes = [photoBox(people, selfies)];
@@ -890,39 +956,49 @@
 
     /* ---------- after auth: upload selfie, then pay or generate ---------- */
 
-    function proceed() {
-      f.busy = true;
-      render();
+    /* Upload the chosen local photos (once). Returns a promise that resolves
+       when every chosen person has a saved selfie id. */
+    function uploadChosen() {
+      if (f.uploading) return f.uploading;
       var need = peopleOf(f.style);
       var lids = [];
       for (var i = 0; i < need; i++) { var sel = selOf(i); if (sel.lid && lids.indexOf(sel.lid) === -1) lids.push(sel.lid); }
+      if (!lids.length) return Promise.resolve();
       var chain = Promise.resolve();
       lids.forEach(function (lid) {
         chain = chain.then(function () {
           var it = f.locals.filter(function (x) { return x.lid === lid; })[0];
           if (!it) return;
-          var fd = new FormData();
-          fd.append('file', it.file);
-          return api('POST', '/selfies', fd).then(function (d) {
-            for (var k = 0; k < need; k++) {
-              var s2 = selOf(k);
-              if (s2.lid === lid) setSel(k, d.selfie.id, null);
-            }
+          return shrinkPhoto(it.file).then(function (small) {
+            var fd = new FormData();
+            fd.append('file', small, small.name || 'selfie.jpg');
+            return api('POST', '/selfies', fd);
+          }).then(function (d) {
+            for (var k = 0; k < need; k++) { if (selOf(k).lid === lid) setSel(k, d.selfie.id, null); }
             URL.revokeObjectURL(it.preview);
             f.locals = f.locals.filter(function (x) { return x.lid !== lid; });
           });
         });
       });
-      chain.then(function () { return loadMe().catch(function () {}); }).then(function () {
-        f.busy = false;
-        var credits = f.me ? Number(f.me.imageCredits || 0) : 0;
-        if (credits >= 1) startGeneration();
-        else getConfig().then(function (cfg) { f.config = cfg; go('pay'); }).catch(function (e) { setError(friendly(e)); });
-      }).catch(function (e) {
-        f.busy = false;
-        f.step = 'style';
-        setError(friendly(e));
-      });
+      f.uploading = chain.then(function () { f.uploading = null; }, function (e) { f.uploading = null; throw e; });
+      return f.uploading;
+    }
+
+    function proceed() {
+      var credits = f.me ? Number(f.me.imageCredits || 0) : 0;
+      if (credits >= 1) {
+        f.busy = true; render();
+        uploadChosen().then(function () { f.busy = false; startGeneration(); })
+          .catch(function (e) { f.busy = false; f.step = 'style'; setError(friendly(e)); });
+        return;
+      }
+      // No credit: show prices right away while the photo uploads behind it.
+      var up = uploadChosen();
+      up.catch(function (e) { setError(friendly(e)); });
+      if (f.config) { go('pay'); return; }
+      f.busy = true; render();
+      getConfig().then(function (cfg) { f.busy = false; f.config = cfg; go('pay'); })
+        .catch(function (e) { f.busy = false; setError(friendly(e)); });
     }
 
     /* ---------- step 3: pay ---------- */
@@ -1016,6 +1092,10 @@
 
     function pay(pack, disc) {
       f.busy = true; render();
+      (f.uploading || Promise.resolve()).then(function () { payNow(pack, disc); })
+        .catch(function (e) { f.busy = false; f.step = 'style'; setError(friendly(e)); });
+    }
+    function payNow(pack, disc) {
       ssSet(PENDING_KEY, JSON.stringify({ style: f.style, styles: f.styles.slice(0, 12), variant: f.variant, category: f.category, selfieId: f.selfieId, others: f.others.map(function (o) { return { selfieId: o && o.selfieId || null }; }), at: Date.now() }));
       var body = pack.id === 'single'
         ? { kind: 'single', slug: f.style.slug, returnUrl: location.href.split('#')[0] }
