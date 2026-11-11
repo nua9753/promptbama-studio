@@ -61,12 +61,15 @@ img { display: block; max-width: 100%; }
   display: flex;
   gap: 10px;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
+  /* proximity (not mandatory) and no mask-image: both made mobile page
+     scrolling stutter when a vertical swipe started on the rail. */
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
   margin: 0 -14px;
   padding: 4px 14px 6px;
   scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to left, #000 88%, transparent);
-  mask-image: linear-gradient(to left, #000 88%, transparent);
 }
 .rail::-webkit-scrollbar { display: none; }
 .rail-nav { display: none; gap: 8px; justify-content: flex-start; }
@@ -384,3 +387,6 @@ input:focus { border-color: var(--a); outline: none; }
 .toast.is-light .spin { border-color: rgba(15,92,82,.2); border-top-color: var(--a); }
 .acct { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); background: rgba(127,127,127,.08); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
 .acct .link { font-size: 13px; }
+
+/* Keep the widget's layout and paint work inside itself while the page scrolls. */
+.card, .c-card { contain: layout style; }

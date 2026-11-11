@@ -280,15 +280,28 @@
     if (holder.stop) holder.stop();
     holder.stop = null;
     if (REDUCED || !rail || rail.children.length < 4) return;
-    var paused = false, visible = true, resumeAt = 0;
+    var paused = false, visible = true, resumeAt = 0, step = 0;
     var rtl = getComputedStyle(rail).direction === 'rtl';
     function stepSize() {
+      if (step) return step;
       var t = rail.children[0];
       var gap = parseFloat(getComputedStyle(rail).columnGap || getComputedStyle(rail).gap) || 10;
-      return t ? t.getBoundingClientRect().width + gap : 120;
+      step = t ? t.getBoundingClientRect().width + gap : 120;
+      return step;
     }
+    // Never move the rail while the reader is scrolling or touching the page:
+    // a programmatic smooth scroll under a finger makes mobile scrolling stutter
+    // or get "stuck". Wait until the page has been still for a moment.
+    var touching = false;
+    function busy() { resumeAt = Math.max(resumeAt, Date.now() + 1800); }
+    function touchOn() { touching = true; busy(); }
+    function touchOff() { touching = false; busy(); }
+    window.addEventListener('scroll', busy, { passive: true });
+    document.addEventListener('touchstart', touchOn, { passive: true, capture: true });
+    document.addEventListener('touchend', touchOff, { passive: true, capture: true });
+    document.addEventListener('touchcancel', touchOff, { passive: true, capture: true });
     function tick() {
-      if (paused || !visible || Date.now() < resumeAt || document.hidden || (Flow && Flow.isOpen())) return;
+      if (paused || touching || !visible || Date.now() < resumeAt || document.hidden || (Flow && Flow.isOpen())) return;
       var max = rail.scrollWidth - rail.clientWidth;
       if (max <= 4) return;
       var pos = Math.abs(rail.scrollLeft);
@@ -303,7 +316,13 @@
     var io = window.IntersectionObserver ? new IntersectionObserver(function (en) { visible = en[0] && en[0].isIntersecting; }, { threshold: 0.3 }) : null;
     if (io) io.observe(rail);
     var timer = setInterval(tick, 2800);
-    holder.stop = function () { clearInterval(timer); if (io) io.disconnect(); };
+    holder.stop = function () {
+      clearInterval(timer); if (io) io.disconnect();
+      window.removeEventListener('scroll', busy);
+      document.removeEventListener('touchstart', touchOn, true);
+      document.removeEventListener('touchend', touchOff, true);
+      document.removeEventListener('touchcancel', touchOff, true);
+    };
   }
 
   /* ------------------------- design C (white & calm) ------------------------- */
@@ -543,7 +562,7 @@
         var ctx = getCtx();
         root.appendChild(h('div', { class: 'float' + (ctx.variant === 'c' ? ' is-light' : '') }, [
           h('button', { type: 'button', class: 'float-btn', onclick: function () { Flow.open(getCtx()); } }, [
-            h('span', { class: 'float-thumbs' }, (ctx.styles || []).slice(0, 3).map(function (s) { return h('img', { src: s.imageUrl, alt: '' }); })),
+            h('span', { class: 'float-thumbs' }, (ctx.styles || []).slice(0, 3).map(function (s) { return h('img', { src: s.imageUrl, alt: '', loading: 'lazy', decoding: 'async' }); })),
             h('span', { class: 'float-text', text: T.floating || '' }),
             h('span', { class: 'float-go', text: ctx.variant === 'c' ? 'ساخت عکس' : 'بساز' })
           ])
